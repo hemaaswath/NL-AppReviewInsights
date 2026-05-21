@@ -1,0 +1,28 @@
+{
+  "reviews": [
+    {
+      "authorName": {"text": "John Doe"},
+      "title": "Great investment app",
+      "text": "This app has made investing so easy for me. The UI is intuitive and the features are amazing!",
+      "starRating": 5,
+      "timestampUsec": 1715904000000000,
+      "appVersion": "2.5.0"
+    },
+    {
+      "authorName": {"text": "Jane Smith"},
+      "title": "Good but needs improvement",
+      "text": "Overall a good app but sometimes it crashes when I try to buy stocks. Please fix this.",
+      "starRating": 4,
+      "timestampUsec": 1715817600000000,
+      "appVersion": "2.4.8"
+    },
+    {
+      "authorName": {"text": "Mike Johnson"},
+      "title": "Best trading platform",
+      "text": "I've tried many trading apps but this one is the best. Low fees and great customer support.",
+      "starRating": 5,
+      "timestampUsec": 1715731200000000,
+      "appVersion": "2.5.0"
+    }
+  ]
+}

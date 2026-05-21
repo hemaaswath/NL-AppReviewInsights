@@ -1,0 +1,20 @@
+# Normalize line endings (reduces "LF will be replaced by CRLF" warnings on Windows).
+* text=auto
+
+# Source and docs: LF in repo (standard for Python / GitHub)
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Windows scripts: CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+
+# Binary
+*.db binary
+*.png binary
+*.jpg binary
+*.jpeg binary

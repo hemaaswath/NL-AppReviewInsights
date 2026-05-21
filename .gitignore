@@ -1,0 +1,35 @@
+# Secrets and local config
+.env
+.env.local
+!.env.example
+
+# Google OAuth (any path)
+**/credentials.json
+**/token.json
+**/.oauth_client_id
+**/oauth_authorize_url.txt
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.pytest-tmp*/
+
+# IDE / OS
+.cursor/
+.kiro/
+.DS_Store
+Thumbs.db
+
+# Debug logs
+debug-*.log
+
+# Local DB (optional — remove this line if you want to commit reviews.db)
+data/reviews.db
+
+# Generated test artifacts
+phase-*/test-results/
+**/test-results/
