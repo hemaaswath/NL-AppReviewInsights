@@ -134,10 +134,27 @@ def load_dashboard(db_path: str) -> dict:
         db.close()
 
 
-# ── Sidebar (no vendor / API names) ───────────────────────────────────────────
+from shared.db_paths import resolve_database_path
+from shared.play_store_config import resolve_play_package, validate_finance_package
+
+db_path = resolve_database_path(config_value("DATABASE_PATH") or None)
+os.environ["DATABASE_PATH"] = db_path
+
+_raw_pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME") or None
+play_pkg = resolve_play_package(_raw_pkg)
+os.environ["GOOGLE_PLAY_PACKAGE_NAME"] = play_pkg
+_pkg_ok, _pkg_info = validate_finance_package(play_pkg)
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     render_sidebar_brand()
-    st.caption("Insights refresh automatically when you open the app or tap below.")
+    if _raw_pkg == "com.groww":
+        st.warning(
+            "Secrets still use `com.groww` (plant app). Fixed to **com.nextbillion.groww** for this run. "
+            "Update Streamlit Secrets, then **Refresh insights**."
+        )
+    st.caption(f"Source app: {_pkg_info}" if _pkg_ok else f"⚠ {_pkg_info}")
+    st.caption("Tap refresh to wipe old data and re-fetch finance reviews.")
     if st.button("Refresh insights", type="primary", use_container_width=True):
         st.session_state["pipeline_done"] = False
         st.session_state["force_refresh"] = True
@@ -146,11 +163,6 @@ with st.sidebar:
     if not _analysis_configured():
         st.warning("Dashboard sync is unavailable. Check app configuration.")
 
-from shared.db_paths import resolve_database_path
-
-db_path = resolve_database_path(config_value("DATABASE_PATH") or None)
-os.environ["DATABASE_PATH"] = db_path
-
 data = load_dashboard(db_path)
 needs_pipeline = (
     data["insights"] is None
@@ -158,6 +170,17 @@ needs_pipeline = (
     or st.session_state.get("force_refresh")
 )
 if needs_pipeline and _analysis_configured() and not st.session_state.get("pipeline_done"):
+    if st.session_state.get("force_refresh"):
+        from shared.database import DatabaseManager
+
+        _db = DatabaseManager(db_path)
+        try:
+            _db.clear_all_data()
+        finally:
+            _db.close()
+    if not _pkg_ok:
+        st.error(f"Cannot sync: {_pkg_info}")
+        st.stop()
     run_background_pipeline(db_path)
     st.session_state.pop("force_refresh", None)
     st.rerun()
@@ -174,8 +197,7 @@ pos_pct = int(round(100 * pos / total_sent)) if total_sent else 0
 week = insights.get("week", "—")
 doc_url = doc_url_from_id(insights.get("doc_id"))
 email_id = insights.get("email_id")
-pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME", "com.nextbillion.groww")
-play_url = f"https://play.google.com/store/apps/details?id={pkg}"
+play_url = f"https://play.google.com/store/apps/details?id={play_pkg}"
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 render_hero(week, data["total"], analysed, pos_pct)

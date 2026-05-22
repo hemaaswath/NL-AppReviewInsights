@@ -270,6 +270,12 @@ class DatabaseManager:
                     dist[row.rating] += 1
         return dist
 
+    def clear_all_data(self) -> None:
+        """Remove all reviews and insights (e.g. after wrong app package was collected)."""
+        with self.get_session() as session:
+            session.query(ReviewModel).delete()
+            session.query(InsightsModel).delete()
+
     def get_review_count(self, source: Optional[str] = None) -> int:
         """Get total review count.
         

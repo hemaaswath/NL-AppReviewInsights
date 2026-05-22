@@ -14,12 +14,17 @@ from dotenv import load_dotenv
 from google_play_scraper import Sort, reviews as fetch_reviews
 from shared.database import DatabaseManager
 from shared.models import ReviewSource
+from shared.play_store_config import resolve_play_package, validate_finance_package
 from shared.review_normalizer import normalize_review_fields
 
 load_dotenv()
 
-# Fintech Groww (stocks/MF) — NOT com.groww (that ID is a plant-care app on Play Store)
-PACKAGE_NAME = os.getenv("GOOGLE_PLAY_PACKAGE_NAME", "com.nextbillion.groww")
+PACKAGE_NAME = resolve_play_package()
+ok, app_info = validate_finance_package(PACKAGE_NAME)
+if not ok:
+    raise SystemExit(f"Wrong Google Play app configured:\n  {app_info}\n  Set GOOGLE_PLAY_PACKAGE_NAME=com.nextbillion.groww")
+print(f"Collecting reviews for: {app_info}")
+print(f"Package: {PACKAGE_NAME}")
 
 # Combinations to try: (lang, country, sort_label, Sort)
 # English storefronts only — Hindi/other locales filtered at normalization too

@@ -68,7 +68,7 @@ Your `.env` at the repo root is loaded automatically; local `token.json` is used
    | `GOOGLE_TOKEN_JSON` | Yes (from `token.json`) |
    | `GOOGLE_DOC_ID` | Yes |
    | `EMAIL_RECIPIENT` | **Yes** — required for Phase 4 (e.g. `hemaaswath19@gmail.com`) |
-   | `GOOGLE_PLAY_PACKAGE_NAME` | Optional (`com.groww`) |
+   | `GOOGLE_PLAY_PACKAGE_NAME` | **`com.nextbillion.groww`** (NOT `com.groww` — plant app) |
    | `DATABASE_PATH` | Optional (`data/reviews.db`) |
    | `GOOGLE_CREDENTIALS_JSON` | Optional |
 
