@@ -54,6 +54,10 @@ class ReportOrchestrator:
             )
 
         insights = self._dict_to_insights(insights_data)
+        prior_data = self.db.get_prior_week_insights(insights.week)
+        from shared.week_over_week import compute_week_over_week
+
+        wow = compute_week_over_week(insights_data, prior_data)
         print(f"Loaded insights for week: {insights.week}")
         print(f"  Reviews analysed : {insights.total_reviews_analysed}")
         print(f"  Themes           : {len(insights.themes)}")
@@ -62,7 +66,7 @@ class ReportOrchestrator:
 
         # ── 2. Format report ──────────────────────────────────────────────────
         print("\n[1/3] Formatting report...")
-        report = self.formatter.format(insights)
+        report = self.formatter.format(insights, week_over_week=wow if wow.get("has_prior_week") else None)
         print(f"  Word count : {report['word_count']} / {self.formatter.MAX_WORDS} max")
 
         if report["word_count"] > self.formatter.MAX_WORDS:

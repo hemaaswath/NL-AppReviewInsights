@@ -7,30 +7,35 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from shared.models import Theme, SentimentLabel
-from shared.phase2_config import DEFAULT_GROQ_MODEL
 from shared.groq_throttle import wait_for_groq_slot
+from shared.groww_product_map import (
+    cluster_by_keywords,
+    normalize_themes_from_llm,
+    product_map_prompt_block,
+)
 
 load_dotenv()
 
-_SYSTEM_PROMPT = """You are a product analyst specialising in mobile app review analysis.
-Given a list of app reviews, identify the top recurring themes (maximum 5).
+_SYSTEM_PROMPT = f"""You are a product analyst for Groww, an Indian fintech investment app.
+Group Play Store reviews into Groww product areas (maximum 5 areas with clear signal).
+
+{product_map_prompt_block()}
 
 Rules:
-- Themes must be distinct and non-overlapping
-- Each theme must have a short name (2-4 words), a one-sentence description,
-  an approximate review count, dominant sentiment, and 3-5 keywords
-- Order themes by frequency (most common first)
+- Each theme "name" MUST be one of the exact product-area strings listed above
+- review_count = approximate number of reviews mentioning that area (sum ≤ total reviews)
+- Order by review_count descending
 - Respond ONLY with valid JSON array, no markdown, no extra text.
 
 Output format (array of theme objects):
 [
-  {
-    "name": "Theme Name",
-    "description": "One sentence describing what users say about this.",
+  {{
+    "name": "Stocks & F&O",
+    "description": "One sentence describing what users say about this area.",
     "review_count": <integer>,
     "sentiment": "positive" | "negative" | "neutral",
     "keywords": ["word1", "word2", "word3"]
-  }
+  }}
 ]"""
 
 
@@ -89,23 +94,12 @@ class ThemeClusterer:
                 if raw.startswith("json"):
                     raw = raw[4:]
             data = json.loads(raw)
-            themes = []
-            for item in data[: self.MAX_THEMES]:
-                themes.append(Theme(
-                    name=item["name"],
-                    description=item["description"],
-                    review_count=int(item.get("review_count", 0)),
-                    sentiment=SentimentLabel(item.get("sentiment", "neutral")),
-                    keywords=item.get("keywords", []),
-                ))
-            return themes
+            if not isinstance(data, list):
+                raise ValueError("Expected JSON array")
+            themes = normalize_themes_from_llm(data[: self.MAX_THEMES], len(reviews))
+            if themes:
+                return themes
+            return cluster_by_keywords(reviews, self.MAX_THEMES)
         except Exception as e:
             print(f"Theme clustering error: {e}")
-            # Fallback: single generic theme
-            return [Theme(
-                name="General Feedback",
-                description="Mixed user feedback about the app.",
-                review_count=len(reviews),
-                sentiment=SentimentLabel.NEUTRAL,
-                keywords=["app", "feedback"],
-            )]
+            return cluster_by_keywords(reviews, self.MAX_THEMES)

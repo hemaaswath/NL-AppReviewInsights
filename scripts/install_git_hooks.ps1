@@ -1,13 +1,21 @@
-# Install pre-commit hook to block accidental secret commits.
+# Install pre-commit + pre-push hooks to block accidental secret commits/pushes.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$HookSrc = Join-Path $Root "scripts\git-hooks\pre-commit"
-$HookDest = Join-Path $Root ".git\hooks\pre-commit"
+$HooksDir = Join-Path $Root "scripts\git-hooks"
+$GitHooks = Join-Path $Root ".git\hooks"
 
 if (-not (Test-Path (Join-Path $Root ".git"))) {
     Write-Error "Not a git repo: $Root"
 }
 
-Copy-Item $HookSrc $HookDest -Force
-Write-Host "Installed pre-commit hook -> $HookDest"
-Write-Host "Commits that stage .env, secrets.toml, token.json, etc. will be blocked."
+foreach ($name in @("pre-commit", "pre-push")) {
+    $src = Join-Path $HooksDir $name
+    $dest = Join-Path $GitHooks $name
+    Copy-Item $src $dest -Force
+    Write-Host "Installed $name -> $dest"
+}
+
+Write-Host ""
+Write-Host "Blocked: .env, secrets.toml, token.json, credentials.json, gsk_/sk- keys in file content."
+Write-Host "Before push:  python scripts/secret_scan.py tracked"
+Write-Host "Safe push:    .\scripts\safe_git_push.ps1"

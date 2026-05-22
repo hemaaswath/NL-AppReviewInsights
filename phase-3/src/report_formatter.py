@@ -6,6 +6,8 @@ Produces two representations:
   - plain_text : for Google Docs insertion
   - markdown   : for local file output / preview
 """
+from typing import Any, Optional
+
 from shared.models import WeeklyInsights
 
 PRIORITY_ICON = {"high": "🔴", "medium": "🟡", "low": "🟢"}
@@ -17,11 +19,16 @@ class ReportFormatter:
 
     MAX_WORDS = 250
 
-    def format(self, insights: WeeklyInsights) -> dict:
+    def format(
+        self,
+        insights: WeeklyInsights,
+        week_over_week: Optional[dict[str, Any]] = None,
+    ) -> dict:
         """Format insights into plain text and markdown representations.
 
         Args:
             insights: WeeklyInsights object from Phase 2.
+            week_over_week: Optional WoW dict from shared.week_over_week.
 
         Returns:
             dict with keys:
@@ -41,6 +48,8 @@ class ReportFormatter:
             "actions":  self._actions_section(insights),
             "footer":   self._footer(insights),
         }
+        if week_over_week:
+            sections["wow"] = self._wow_section(week_over_week)
 
         plain_text = "\n\n".join(sections.values())
         markdown   = self._to_markdown(title, insights, sections)
@@ -77,8 +86,15 @@ class ReportFormatter:
             f"Neutral: {neu}"
         )
 
+    def _wow_section(self, wow: dict[str, Any]) -> str:
+        lines = ["WEEK OVER WEEK"]
+        lines.append(wow.get("headline", ""))
+        for t in (wow.get("rising_themes") or [])[:2]:
+            lines.append(f"  ↑ {t['name']}: +{t['delta']} mentions vs prior week")
+        return "\n".join(lines)
+
     def _themes_section(self, insights: WeeklyInsights) -> str:
-        lines = ["TOP THEMES"]
+        lines = ["PRODUCT AREAS (GROWW MAP)"]
         for i, theme in enumerate(insights.themes, 1):
             icon = SENTIMENT_ICON.get(theme.sentiment.value, "")
             # Keep it tight: name + sentiment icon + review count only

@@ -371,3 +371,14 @@ class DatabaseManager:
                 .all()
             )
             return [r.week for r in rows]
+
+    def get_prior_week_insights(self, week: Optional[str] = None) -> Optional[dict]:
+        """Insights for the calendar week before `week` (or before latest if None)."""
+        weeks = self.list_insights_weeks()
+        if not weeks:
+            return None
+        target = week or weeks[0]
+        from shared.week_over_week import previous_week_id
+
+        prior_id = previous_week_id(target)
+        return self.get_insights(prior_id)

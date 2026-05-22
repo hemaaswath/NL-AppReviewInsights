@@ -1,15 +1,27 @@
 #!/bin/sh
-# Block commits that include secret files (install via scripts/install_git_hooks.ps1).
+# Block commits that include secret files or secret content (install via install_git_hooks.ps1).
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT" || exit 1
+
+_run_py() {
+  if command -v python >/dev/null 2>&1; then
+    python "$ROOT/scripts/secret_scan.py" staged
+  elif command -v py >/dev/null 2>&1; then
+    py "$ROOT/scripts/secret_scan.py" staged
+  else
+    return 1
+  fi
+}
+
+if _run_py; then
+  exit 0
+fi
 
 if command -v pwsh >/dev/null 2>&1; then
   pwsh -NoProfile -File "$ROOT/scripts/check_no_secrets_staged.ps1"
 elif command -v powershell >/dev/null 2>&1; then
   powershell -NoProfile -ExecutionPolicy Bypass -File "$ROOT/scripts/check_no_secrets_staged.ps1"
 else
-  python "$ROOT/scripts/check_no_secrets_staged.py" 2>/dev/null || {
-    echo "Install PowerShell or Python to run secret checks, or skip with: git commit --no-verify"
-    exit 1
-  }
+  echo "Install Python or PowerShell for secret checks."
+  exit 1
 fi

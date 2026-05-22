@@ -34,25 +34,42 @@ Only **placeholders** are public: `.env.example`, `.streamlit/secrets.toml.examp
 | Secrets pasted in **chat / screenshots** | **High** if you shared real keys | **Rotate** Groq key, Google OAuth client secret, re-run OAuth |
 | **Streamlit Cloud** Secrets UI | OK if only you have access | Don’t paste into GitHub files |
 
-If you ever committed a real `.env` once (even if deleted later), treat keys as leaked and **rotate** them; old commits can still contain files.
+If you ever committed a real `.env` once (even if deleted later), treat keys as leaked and **rotate** them; old commits can still contain files until history is rewritten (BFG Repo-Cleaner / `git filter-repo`). Deleting a file on GitHub’s website does **not** remove it from git history.
 
 ---
 
-## Install commit protection (once per clone)
+## Permanent protection (install once per clone)
 
 ```powershell
 .\scripts\install_git_hooks.ps1
 ```
 
-This blocks commits that stage: `.env`, `secrets.toml`, `token.json`, `credentials.json`, `secrets_export.txt`.
+This installs **pre-commit** and **pre-push** hooks that block:
 
-Before each commit:
+- Secret **paths**: `.env`, `secrets.toml`, `token.json`, `credentials.json`, `secrets_export.txt`, etc.
+- Secret **content** in any staged/pushed file: `gsk_…` Groq keys, `sk-…`, real `refresh_token` / `client_secret` values, large `GOOGLE_TOKEN_JSON` blobs.
+
+**Push safely (recommended):**
+
+```powershell
+.\scripts\safe_git_push.ps1
+```
+
+**Manual checks:**
+
+```powershell
+python scripts/secret_scan.py staged
+python scripts/secret_scan.py tracked
+```
+
+GitHub Actions workflow `.github/workflows/block-secrets.yml` runs the same scan on every push/PR to `main`.
+
+Before each commit, add **only code files** — never `git add .`:
 
 ```powershell
 git status
-.\scripts\check_no_secrets_staged.ps1
-git add streamlit_app.py   # example: only code files
-git commit -m "message"
+git add streamlit_app.py shared/week_over_week.py
+git commit -m "your message"
 ```
 
 ---

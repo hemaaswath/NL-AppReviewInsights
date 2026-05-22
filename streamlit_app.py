@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 
 from frontend.dashboard_ui import (
     inject_styles,
+    product_map_chart,
     rating_bars,
     render_actions,
     render_deliverables,
@@ -35,8 +36,11 @@ from frontend.dashboard_ui import (
     render_sidebar_sync,
     render_pipeline_steps,
     render_themes,
+    render_wow_pulse,
     sentiment_donut,
 )
+from shared.groww_product_map import themes_to_area_counts
+from shared.week_over_week import compute_week_over_week
 
 load_dotenv(ROOT / ".env")
 
@@ -122,8 +126,15 @@ def load_dashboard(db_path: str) -> dict:
 
     db = DatabaseManager(db_path)
     try:
+        insights = db.get_insights()
+        prior = None
+        if insights and insights.get("week"):
+            prior = db.get_prior_week_insights(insights["week"])
+        wow = compute_week_over_week(insights, prior)
         return {
-            "insights": db.get_insights(),
+            "insights": insights,
+            "prior_insights": prior,
+            "wow": wow,
             "total": db.get_review_count(),
             "positive": db.get_top_reviews(limit=8, mode="positive"),
             "negative": db.get_top_reviews(limit=8, mode="negative"),
@@ -201,6 +212,8 @@ play_url = f"https://play.google.com/store/apps/details?id={play_pkg}"
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 render_hero(week, data["total"], analysed, pos_pct)
+if data.get("wow"):
+    render_wow_pulse(data["wow"])
 render_kpis(data["total"], analysed, pos, neg, neu)
 
 chart_left, chart_mid, chart_right = st.columns([1.05, 1.05, 1], gap="large")
@@ -222,8 +235,42 @@ with chart_mid:
     st.markdown("</div>", unsafe_allow_html=True)
 
 with chart_right:
-    st.markdown('<div class="panel"><div class="panel-title"><span>●</span> Themes</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="panel"><div class="panel-title"><span>●</span> Top product areas</div>',
+        unsafe_allow_html=True,
+    )
     render_themes(insights.get("themes") or [])
+    st.markdown("</div>", unsafe_allow_html=True)
+
+area_counts = themes_to_area_counts(insights.get("themes") or [])
+render_section_head("Groww product map")
+st.markdown(
+    '<p class="product-map-hint">Reviews grouped into fintech product areas — comparable week over week.</p>',
+    unsafe_allow_html=True,
+)
+map_col, map_side = st.columns([1.4, 1], gap="large")
+with map_col:
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    if sum(area_counts.values()):
+        st.plotly_chart(
+            product_map_chart(area_counts),
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+    else:
+        st.caption("Product map fills in after analysis.")
+    st.markdown("</div>", unsafe_allow_html=True)
+with map_side:
+    st.markdown('<div class="panel"><div class="panel-title">Prior week</div>', unsafe_allow_html=True)
+    prior = data.get("prior_insights")
+    if prior:
+        p_sent = prior.get("sentiment_summary") or {}
+        p_total = sum(p_sent.get(k, 0) for k in ("positive", "negative", "neutral")) or 1
+        p_pos = int(round(100 * p_sent.get("positive", 0) / p_total))
+        st.caption(f"**{prior.get('week', '—')}** · {prior.get('total_reviews_analysed', 0)} reviews · {p_pos}% positive")
+        render_themes(prior.get("themes") or [])
+    else:
+        st.caption("Save insights for two different weeks to compare trends.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 render_section_head("Voice of the customer")

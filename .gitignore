@@ -1,18 +1,26 @@
-# Secrets and local config (NEVER commit these — use Streamlit Cloud UI only)
+# Secrets and local config (NEVER commit — use .env locally, Streamlit Cloud UI only)
 .env
 .env.*
 !.env.example
 .env.local
+*.pem
+*.p12
+service-account*.json
+
 .streamlit/secrets.toml
 .streamlit/secrets_export.txt
+**/*secrets_export*
 **/secrets.toml
 !**/.streamlit/secrets.toml.example
+!**/*secrets.toml.example
 
-# Google OAuth (any path)
+# Google OAuth (any path in repo or submodule)
 **/credentials.json
 **/token.json
 **/.oauth_client_id
 **/oauth_authorize_url.txt
+MCPServer/**/credentials.json
+MCPServer/**/token.json
 
 # Python
 venv/

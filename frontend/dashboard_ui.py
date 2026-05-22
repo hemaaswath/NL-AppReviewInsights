@@ -250,6 +250,29 @@ section[data-testid="stSidebar"] .stButton button {
 .deliverable-card .title { font-weight: 800; font-size: 0.95rem; color: var(--ink); }
 .deliverable-card .status { font-size: 0.78rem; color: var(--ink-muted); margin-top: 0.35rem; }
 
+.wow-banner {
+  background: linear-gradient(135deg, #fff 0%, #ecfdf5 100%);
+  border: 1px solid #a7f3d0; border-radius: 18px;
+  padding: 1.15rem 1.35rem; margin-bottom: 1.5rem;
+  box-shadow: 0 4px 18px rgba(0, 179, 134, 0.08);
+}
+.wow-banner .wow-title {
+  font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--groww-dark); margin-bottom: 0.45rem;
+}
+.wow-banner .wow-headline { font-size: 1rem; font-weight: 700; color: var(--ink); line-height: 1.45; }
+.wow-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.wow-chip {
+  font-size: 0.72rem; font-weight: 700; padding: 0.35rem 0.65rem;
+  border-radius: 999px; background: #f0fdf4; color: #047857; border: 1px solid #bbf7d0;
+}
+.wow-chip.down { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.wow-chip.neu { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+
+.product-map-hint {
+  font-size: 0.72rem; color: var(--ink-muted); margin: -0.5rem 0 0.75rem;
+}
+
 .stTabs [data-baseweb="tab-list"] {
   gap: 6px; background: #fff; padding: 8px; border-radius: 14px;
   border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(15,23,42,0.04);
@@ -419,9 +442,63 @@ def rating_bars(dist: dict[int, int]) -> go.Figure:
     return fig
 
 
+def render_wow_pulse(wow: dict) -> None:
+    """Week-over-week change summary."""
+    headline = html.escape(wow.get("headline", ""))
+    chips = []
+    sd = wow.get("sentiment_delta") or {}
+    delta = sd.get("positive_pct_delta", 0)
+    if wow.get("has_prior_week") and delta != 0:
+        cls = "wow-chip" if delta > 0 else "wow-chip down"
+        sign = "+" if delta > 0 else ""
+        chips.append(f'<span class="{cls}">Sentiment {sign}{delta} pts</span>')
+    for t in wow.get("rising_themes") or []:
+        chips.append(
+            f'<span class="wow-chip">↑ {html.escape(t["name"])} (+{t["delta"]})</span>'
+        )
+    for name in wow.get("new_themes") or []:
+        chips.append(f'<span class="wow-chip neu">New: {html.escape(name)}</span>')
+    chip_html = f'<div class="wow-chips">{"".join(chips)}</div>' if chips else ""
+    st.markdown(
+        f'<div class="wow-banner"><div class="wow-title">Week over week</div>'
+        f'<div class="wow-headline">{headline}</div>{chip_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def product_map_chart(area_counts: dict[str, int]) -> go.Figure:
+    """Horizontal bar chart of all Groww product areas."""
+    from shared.groww_product_map import GROWW_PRODUCT_AREAS
+
+    areas = list(GROWW_PRODUCT_AREAS)
+    counts = [area_counts.get(a, 0) for a in areas]
+    colors = ["#00b386" if c > 0 else "#e2e8f0" for c in counts]
+    fig = go.Figure(
+        go.Bar(
+            x=counts,
+            y=areas,
+            orientation="h",
+            marker=dict(color=colors),
+            text=counts,
+            textposition="outside",
+            textfont=dict(size=10, family="Plus Jakarta Sans"),
+        )
+    )
+    fig.update_layout(
+        margin=dict(l=8, r=40, t=8, b=8),
+        height=340,
+        xaxis=dict(showgrid=True, gridcolor="#f1f5f9", zeroline=False, title=""),
+        yaxis=dict(autorange="reversed"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Plus Jakarta Sans", size=10, color="#64748b"),
+    )
+    return fig
+
+
 def render_themes(themes: list[dict]) -> None:
     if not themes:
-        st.caption("Theme breakdown will appear after the next sync.")
+        st.caption("Product-area breakdown will appear after the next sync.")
         return
     max_count = max((t.get("review_count", 0) for t in themes), default=1) or 1
     rows = []
