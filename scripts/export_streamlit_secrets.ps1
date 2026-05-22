@@ -15,7 +15,7 @@ $out = @"
 # Paste into Streamlit Cloud → Secrets (or .streamlit/secrets.toml locally)
 
 GROQ_API_KEY = "YOUR_GROQ_KEY"
-GOOGLE_PLAY_PACKAGE_NAME = "com.groww"
+GOOGLE_PLAY_PACKAGE_NAME = "com.nextbillion.groww"
 GOOGLE_DOC_ID = "YOUR_DOC_ID"
 EMAIL_RECIPIENT = "your@gmail.com"
 DATABASE_PATH = "data/reviews.db"

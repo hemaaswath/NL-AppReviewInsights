@@ -2,6 +2,7 @@
 Script to collect Google Play reviews for Groww across multiple
 sort orders, countries, and languages to maximise real review coverage.
 """
+import os
 import sys
 import hashlib
 from datetime import datetime, timezone
@@ -9,12 +10,16 @@ from datetime import datetime, timezone
 sys.path.insert(0, '.')
 sys.path.insert(0, 'phase-1/src')
 
+from dotenv import load_dotenv
 from google_play_scraper import Sort, reviews as fetch_reviews
 from shared.database import DatabaseManager
 from shared.models import ReviewSource
 from shared.review_normalizer import normalize_review_fields
 
-PACKAGE_NAME = 'com.groww'
+load_dotenv()
+
+# Fintech Groww (stocks/MF) — NOT com.groww (that ID is a plant-care app on Play Store)
+PACKAGE_NAME = os.getenv("GOOGLE_PLAY_PACKAGE_NAME", "com.nextbillion.groww")
 
 # Combinations to try: (lang, country, sort_label, Sort)
 # English storefronts only — Hindi/other locales filtered at normalization too

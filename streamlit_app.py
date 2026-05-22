@@ -174,7 +174,7 @@ pos_pct = int(round(100 * pos / total_sent)) if total_sent else 0
 week = insights.get("week", "—")
 doc_url = doc_url_from_id(insights.get("doc_id"))
 email_id = insights.get("email_id")
-pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME", "com.groww")
+pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME", "com.nextbillion.groww")
 play_url = f"https://play.google.com/store/apps/details?id={pkg}"
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────

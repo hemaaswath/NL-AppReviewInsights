@@ -17,7 +17,7 @@ class GooglePlayCollector:
         """Initialize Google Play Store collector.
         
         Args:
-            package_name: Google Play package name (e.g., com.groww)
+            package_name: Google Play package name (e.g., com.nextbillion.groww)
             weeks_back: Number of weeks back to collect reviews from
         """
         self.package_name = package_name
