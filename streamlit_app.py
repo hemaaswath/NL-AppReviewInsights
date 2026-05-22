@@ -1,7 +1,5 @@
 """
-Groww App Review Insights — premium dashboard (Streamlit Cloud).
-
-Phases 1–4 run in the background when data is missing or on Refresh.
+Groww App Review Insights — executive dashboard (Streamlit Cloud).
 """
 from __future__ import annotations
 
@@ -27,12 +25,16 @@ from frontend.dashboard_ui import (
     inject_styles,
     rating_bars,
     render_actions,
-    render_cta_strip,
+    render_deliverables,
+    render_hero,
     render_kpis,
     render_quotes,
     render_reviews_grid,
+    render_section_head,
+    render_sidebar_brand,
+    render_sidebar_sync,
+    render_pipeline_steps,
     render_themes,
-    render_topbar,
     sentiment_donut,
 )
 
@@ -70,6 +72,10 @@ def config_value(key: str, default: str = "") -> str:
     return _clean_secret_value(os.getenv(key, default))
 
 
+def _analysis_configured() -> bool:
+    return bool(config_value("GROQ_API_KEY"))
+
+
 apply_streamlit_secrets()
 
 st.set_page_config(
@@ -95,25 +101,20 @@ def doc_url_from_id(doc_id: str | None) -> str | None:
 def run_background_pipeline(db_path: str) -> None:
     from shared.pipeline_runner import run_full_pipeline
 
-    steps = {i: "pending" for i in range(1, 5)}
-    status_box = st.sidebar.empty()
+    steps: dict[int, str] = {i: "pending" for i in range(1, 5)}
+    pipeline_slot = st.sidebar.empty()
 
-    def on_step(phase: int, label: str, state: str) -> None:
+    def on_step(phase: int, _label: str, state: str) -> None:
         steps[phase] = state
-        icons = {1: "📥", 2: "🧠", 3: "📄", 4: "✉️"}
-        lines = []
-        for n in range(1, 5):
-            s = steps.get(n, "pending")
-            mark = {"done": "✅", "running": "⏳", "error": "❌", "skipped": "⏭️"}.get(s, "○")
-            lines.append(f"{mark} {icons[n]} {['Collect', 'Analyze', 'Doc', 'Email'][n-1]}")
-        status_box.markdown("**Pipeline**\n\n" + "\n\n".join(lines))
+        with pipeline_slot.container():
+            render_pipeline_steps(steps)
 
-    with st.spinner("Syncing reviews & insights…"):
+    with st.spinner("Updating your dashboard…"):
         result = run_full_pipeline(database_path=db_path, on_step=on_step)
 
     st.session_state["pipeline_result"] = result
     st.session_state["pipeline_done"] = True
-    st.session_state["last_sync"] = datetime.now().strftime("%d %b %Y, %H:%M")
+    st.session_state["last_sync"] = datetime.now().strftime("%d %b %Y · %H:%M")
 
 
 def load_dashboard(db_path: str) -> dict:
@@ -133,29 +134,17 @@ def load_dashboard(db_path: str) -> dict:
         db.close()
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar (no vendor / API names) ───────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### ⚙️ Control panel")
-    st.caption("Data syncs automatically. Use refresh to pull latest Play Store reviews.")
-    if not config_value("GROQ_API_KEY"):
-        st.error("Add **GROQ_API_KEY** in Streamlit secrets.")
-    else:
-        st.success("Groq API connected")
-    if st.button("🔄 Refresh all data", type="primary", use_container_width=True):
+    render_sidebar_brand()
+    st.caption("Insights refresh automatically when you open the app or tap below.")
+    if st.button("Refresh insights", type="primary", use_container_width=True):
         st.session_state["pipeline_done"] = False
         st.session_state["force_refresh"] = True
         st.rerun()
-    if st.session_state.get("last_sync"):
-        st.markdown(f"**Last sync**  \n{st.session_state['last_sync']}")
-    with st.expander("Setup checklist"):
-        st.markdown(
-            """
-            - `GROQ_API_KEY`
-            - `GOOGLE_TOKEN_JSON`
-            - `GOOGLE_DOC_ID`
-            - `EMAIL_RECIPIENT`
-            """
-        )
+    render_sidebar_sync(st.session_state.get("last_sync"))
+    if not _analysis_configured():
+        st.warning("Dashboard sync is unavailable. Check app configuration.")
 
 from shared.db_paths import resolve_database_path
 
@@ -168,9 +157,7 @@ needs_pipeline = (
     or data["total"] == 0
     or st.session_state.get("force_refresh")
 )
-syncing = False
-if needs_pipeline and config_value("GROQ_API_KEY") and not st.session_state.get("pipeline_done"):
-    syncing = True
+if needs_pipeline and _analysis_configured() and not st.session_state.get("pipeline_done"):
     run_background_pipeline(db_path)
     st.session_state.pop("force_refresh", None)
     st.rerun()
@@ -181,50 +168,45 @@ sentiment = insights.get("sentiment_summary") or {}
 pos = sentiment.get("positive", 0)
 neg = sentiment.get("negative", 0)
 neu = sentiment.get("neutral", 0)
+analysed = insights.get("total_reviews_analysed", 0) or 0
+total_sent = pos + neg + neu or 1
+pos_pct = int(round(100 * pos / total_sent)) if total_sent else 0
 week = insights.get("week", "—")
 doc_url = doc_url_from_id(insights.get("doc_id"))
 email_id = insights.get("email_id")
 pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME", "com.groww")
 play_url = f"https://play.google.com/store/apps/details?id={pkg}"
 
-# ── Main dashboard ────────────────────────────────────────────────────────────
-render_topbar(week, syncing=syncing)
-render_kpis(
-    data["total"],
-    insights.get("total_reviews_analysed", 0),
-    pos,
-    neg,
-    neu,
-)
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+render_hero(week, data["total"], analysed, pos_pct)
+render_kpis(data["total"], analysed, pos, neg, neu)
 
-chart_left, chart_mid, chart_right = st.columns([1.1, 1.1, 1], gap="large")
+chart_left, chart_mid, chart_right = st.columns([1.05, 1.05, 1], gap="large")
 
 with chart_left:
-    st.markdown('<div class="panel"><div class="panel-title">Sentiment mix</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="panel-title"><span>●</span> Sentiment</div>', unsafe_allow_html=True)
     if pos + neg + neu > 0:
         st.plotly_chart(sentiment_donut(pos, neg, neu), use_container_width=True, config={"displayModeBar": False})
     else:
-        st.caption("Run refresh to load sentiment data.")
+        st.caption("Awaiting next sync.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 with chart_mid:
-    st.markdown('<div class="panel"><div class="panel-title">Star ratings</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="panel-title"><span>●</span> Ratings</div>', unsafe_allow_html=True)
     if sum(data["rating_dist"].values()):
         st.plotly_chart(rating_bars(data["rating_dist"]), use_container_width=True, config={"displayModeBar": False})
     else:
-        st.caption("No ratings yet.")
+        st.caption("Awaiting next sync.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 with chart_right:
-    st.markdown('<div class="panel"><div class="panel-title">Theme leaderboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="panel-title"><span>●</span> Themes</div>', unsafe_allow_html=True)
     render_themes(insights.get("themes") or [])
     st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
-st.markdown("### 💬 Voice of the customer")
-
+render_section_head("Voice of the customer")
 tab_pos, tab_neg, tab_recent, tab_quotes = st.tabs(
-    ["🌟 Top positive", "⚠️ Critical", "🕐 Recent", "✨ AI picks"]
+    ["Loved by users", "Needs attention", "Latest", "Highlighted quotes"]
 )
 
 with tab_pos:
@@ -236,25 +218,17 @@ with tab_recent:
 with tab_quotes:
     render_quotes(insights.get("quotes") or [])
 
-st.markdown("### 🎯 Product actions")
+render_section_head("Recommended for product")
 render_actions(insights.get("actions") or [])
 
-btn1, btn2, btn3 = st.columns(3)
-with btn1:
+render_deliverables(bool(doc_url), bool(email_id))
+
+link1, link2, link3 = st.columns(3)
+with link1:
     if doc_url:
-        st.link_button("📄 Open Google Doc report", doc_url, use_container_width=True, type="primary")
-    else:
-        st.button("📄 Google Doc (pending)", disabled=True, use_container_width=True)
-with btn2:
+        st.link_button("Open weekly report", doc_url, use_container_width=True, type="primary")
+with link2:
     if email_id:
-        st.success("✉️ Gmail draft ready — open **Drafts**")
-    else:
-        st.info("✉️ Gmail draft after EMAIL_RECIPIENT is set")
-with btn3:
-    st.link_button("📱 View on Play Store", play_url, use_container_width=True)
-
-render_cta_strip(doc_url, email_id, play_url)
-
-if st.session_state.get("pipeline_result"):
-    with st.expander("🔧 Sync log (technical)"):
-        st.json(st.session_state["pipeline_result"])
+        st.link_button("Open Gmail drafts", "https://mail.google.com/mail/u/0/#drafts", use_container_width=True)
+with link3:
+    st.link_button("View on Play Store", play_url, use_container_width=True)
