@@ -220,7 +220,9 @@ with st.sidebar:
     if st.session_state.get("last_sync"):
         st.caption(f"Last sync: {st.session_state['last_sync']}")
 
-db_path = config_value("DATABASE_PATH", "data/reviews.db")
+from shared.db_paths import resolve_database_path
+
+db_path = resolve_database_path(config_value("DATABASE_PATH") or None)
 os.environ["DATABASE_PATH"] = db_path
 
 # Auto background pipeline when no insights or forced refresh

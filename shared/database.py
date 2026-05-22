@@ -8,6 +8,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from contextlib import contextmanager
 import os
 
+from shared.db_paths import resolve_database_path, sqlite_url
+
 Base = declarative_base()
 
 
@@ -73,27 +75,23 @@ class InsightsModel(Base):
 class DatabaseManager:
     """Manager for database operations."""
     
-    def __init__(self, database_path: str = "data/reviews.db"):
+    def __init__(self, database_path: str | None = None):
         """Initialize database manager.
         
         Args:
-            database_path: Path to the SQLite database file
+            database_path: Path to the SQLite database file (resolved for cloud)
         """
-        self.database_path = database_path
+        self.database_path = resolve_database_path(database_path)
         self.engine = None
         self.SessionLocal = None
         self._initialize_database()
     
     def _initialize_database(self):
         """Initialize database connection and create tables."""
-        # Ensure data directory exists
-        os.makedirs(os.path.dirname(self.database_path), exist_ok=True)
-        
-        # Create engine
         self.engine = create_engine(
-            f"sqlite:///{self.database_path}",
+            sqlite_url(self.database_path),
             echo=False,
-            connect_args={"check_same_thread": False}
+            connect_args={"check_same_thread": False},
         )
         
         # Create session factory
