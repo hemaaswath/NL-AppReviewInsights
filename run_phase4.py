@@ -9,13 +9,20 @@ import requests
 sys.path.insert(0, ".")
 sys.path.insert(0, "phase-4/src")
 
-from shared.mcp_config import resolve_mcp_server_url
+from shared.mcp_config import resolve_mcp_server_url, use_direct_google
 from distribution_orchestrator import DistributionOrchestrator
 
 MCP_TOKEN = Path("MCPServer/saksham-mcp-server/token.json")
 
 
 def _preflight() -> None:
+    if use_direct_google():
+        if not MCP_TOKEN.is_file() and not __import__("os").environ.get("GOOGLE_TOKEN_JSON"):
+            raise SystemExit(
+                f"Direct Google mode: missing {MCP_TOKEN} or GOOGLE_TOKEN_JSON.\n"
+                "  .\\scripts\\complete_oauth.ps1"
+            )
+        return
     mcp_url = resolve_mcp_server_url()
     try:
         resp = requests.get(f"{mcp_url}/health", timeout=5)

@@ -20,7 +20,8 @@ GOOGLE_DOC_ID = "YOUR_DOC_ID"
 EMAIL_RECIPIENT = "your@gmail.com"
 DATABASE_PATH = "data/reviews.db"
 
-GOOGLE_TOKEN_JSON = "$((Get-Content $TokenPath -Raw).Trim())"
+# Single-quoted TOML so inner JSON double-quotes are safe on Streamlit Cloud
+GOOGLE_TOKEN_JSON = '$((Get-Content $TokenPath -Raw).Trim() -replace "'", "''")'
 "@
 
 if (Test-Path $CredsPath) {
