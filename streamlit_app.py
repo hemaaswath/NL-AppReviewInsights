@@ -37,14 +37,64 @@ SECRET_KEYS = (
 )
 
 
+def _clean_secret_value(value: str) -> str:
+    """Strip whitespace and accidental surrounding quotes from pasted secrets."""
+    v = (value or "").strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1].strip()
+    return v
+
+
 def apply_streamlit_secrets() -> None:
     """Map Streamlit Cloud secrets into os.environ."""
     try:
         for key in SECRET_KEYS:
             if key in st.secrets and st.secrets[key]:
-                os.environ[key] = str(st.secrets[key])
+                os.environ[key] = _clean_secret_value(str(st.secrets[key]))
     except Exception:
         pass
+
+
+def config_value(key: str, default: str = "") -> str:
+    """Read config from Streamlit secrets first, then environment."""
+    apply_streamlit_secrets()
+    return _clean_secret_value(os.getenv(key, default))
+
+
+def check_phase4_prereqs() -> str | None:
+    """Return an error message if Phase 4 cannot run, else None."""
+    from email_composer import validate_email
+    from shared.database import DatabaseManager
+
+    recipient = config_value("EMAIL_RECIPIENT")
+    if not validate_email(recipient):
+        return (
+            "EMAIL_RECIPIENT is missing or invalid. "
+            "In Streamlit Cloud → App settings → Secrets, add:\n\n"
+            'EMAIL_RECIPIENT = "your@gmail.com"'
+        )
+
+    if not config_value("GOOGLE_TOKEN_JSON") and not status.get("token_present"):
+        return (
+            "GOOGLE_TOKEN_JSON is missing. Add your token.json contents to Streamlit secrets "
+            "(run scripts/export_streamlit_secrets.ps1 locally)."
+        )
+
+    db_path = config_value("DATABASE_PATH", "data/reviews.db")
+    db = DatabaseManager(db_path)
+    try:
+        insights = db.get_insights()
+    finally:
+        db.close()
+
+    if not insights:
+        return "No insights in the database. Run Phase 2 on this app first (Streamlit Cloud storage resets on redeploy)."
+    if not insights.get("doc_id"):
+        return "No doc_id in insights. Run Phase 3 before Phase 4."
+
+    os.environ["EMAIL_RECIPIENT"] = recipient
+    os.environ["DATABASE_PATH"] = db_path
+    return None
 
 
 apply_streamlit_secrets()
@@ -73,14 +123,22 @@ Set secrets in **Streamlit Cloud → App settings → Secrets** (see `Docs/DEPLO
 Locally: copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`.
         """
     )
+    recipient = config_value("EMAIL_RECIPIENT")
     st.json(
         {
-            "GOOGLE_DOC_ID": bool(os.getenv("GOOGLE_DOC_ID")),
-            "EMAIL_RECIPIENT": os.getenv("EMAIL_RECIPIENT", ""),
-            "GROQ_API_KEY": bool(os.getenv("GROQ_API_KEY")),
-            "DATABASE_PATH": os.getenv("DATABASE_PATH", "data/reviews.db"),
+            "GOOGLE_DOC_ID": bool(config_value("GOOGLE_DOC_ID")),
+            "EMAIL_RECIPIENT_set": bool(recipient),
+            "EMAIL_RECIPIENT_preview": (
+                recipient[:3] + "***@" + recipient.split("@")[-1]
+                if "@" in recipient
+                else "(not set)"
+            ),
+            "GROQ_API_KEY": bool(config_value("GROQ_API_KEY")),
+            "DATABASE_PATH": config_value("DATABASE_PATH", "data/reviews.db"),
         }
     )
+    if not recipient:
+        st.warning("Add **EMAIL_RECIPIENT** to Streamlit secrets before Phase 4.")
 
 
 def run_collect_inline():
@@ -114,7 +172,11 @@ def run_phase3():
 def run_phase4():
     from distribution_orchestrator import DistributionOrchestrator
 
-    orch = DistributionOrchestrator()
+    apply_streamlit_secrets()
+    orch = DistributionOrchestrator(
+        database_path=config_value("DATABASE_PATH", "data/reviews.db"),
+        recipient=config_value("EMAIL_RECIPIENT"),
+    )
     try:
         return orch.run()
     finally:
@@ -166,10 +228,14 @@ with tab_run:
         st.json(result)
 
     if st.button("Phase 4 — Create Gmail draft"):
-        with st.spinner("Creating Gmail draft…"):
-            result = run_phase4()
-        st.success("Phase 4 complete.")
-        st.json(result)
+        prereq_err = check_phase4_prereqs()
+        if prereq_err:
+            st.error(prereq_err)
+        else:
+            with st.spinner("Creating Gmail draft…"):
+                result = run_phase4()
+            st.success("Phase 4 complete.")
+            st.json(result)
 
     if st.button("Run full pipeline (1 → 4)", type="secondary"):
         with st.status("Full pipeline", expanded=True) as s:
@@ -180,6 +246,9 @@ with tab_run:
             s.write("Phase 3: Google Doc…")
             run_phase3()
             s.write("Phase 4: Gmail draft…")
+            prereq_err = check_phase4_prereqs()
+            if prereq_err:
+                raise RuntimeError(prereq_err)
             run_phase4()
             s.update(label="Pipeline complete", state="complete")
         st.balloons()

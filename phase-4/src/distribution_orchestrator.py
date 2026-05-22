@@ -46,9 +46,15 @@ class DistributionOrchestrator:
         print(f"{'=' * 60}")
 
         if not validate_email(self.recipient):
+            deployed = os.getenv("STREAMLIT_DEPLOYMENT")
+            hint = (
+                "Set EMAIL_RECIPIENT in Streamlit Cloud → App settings → Secrets, e.g.\n"
+                '  EMAIL_RECIPIENT = "you@gmail.com"'
+                if deployed
+                else "Set EMAIL_RECIPIENT in .env or .streamlit/secrets.toml."
+            )
             raise ValueError(
-                f"Invalid or missing recipient email: '{self.recipient}'. "
-                "Set EMAIL_RECIPIENT in .env."
+                f"Invalid or missing recipient email: '{self.recipient}'. {hint}"
             )
         print(f"Recipient: {self.recipient}")
 
