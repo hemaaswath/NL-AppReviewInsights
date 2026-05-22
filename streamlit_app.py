@@ -1,12 +1,10 @@
 """
-Groww App Review Insights — dashboard (Streamlit Cloud).
+Groww App Review Insights — premium dashboard (Streamlit Cloud).
 
-Pipeline phases 1–4 run automatically in the background when data is missing
-or when the user clicks Refresh in the sidebar. No per-phase buttons.
+Phases 1–4 run in the background when data is missing or on Refresh.
 """
 from __future__ import annotations
 
-import html
 import os
 import sys
 from datetime import datetime
@@ -14,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 os.chdir(ROOT)
-for sub in ("", "phase-1/src", "phase-2/src", "phase-3/src", "phase-4/src"):
+for sub in ("", "frontend", "phase-1/src", "phase-2/src", "phase-3/src", "phase-4/src"):
     p = str(ROOT / sub) if sub else str(ROOT)
     if p not in sys.path:
         sys.path.insert(0, p)
@@ -24,6 +22,19 @@ os.environ.setdefault("USE_DIRECT_GOOGLE", "1")
 
 import streamlit as st
 from dotenv import load_dotenv
+
+from frontend.dashboard_ui import (
+    inject_styles,
+    rating_bars,
+    render_actions,
+    render_cta_strip,
+    render_kpis,
+    render_quotes,
+    render_reviews_grid,
+    render_themes,
+    render_topbar,
+    sentiment_donut,
+)
 
 load_dotenv(ROOT / ".env")
 
@@ -62,80 +73,13 @@ def config_value(key: str, default: str = "") -> str:
 apply_streamlit_secrets()
 
 st.set_page_config(
-    page_title="Groww Review Insights",
-    page_icon="📱",
+    page_title="Groww Review Pulse",
+    page_icon="📈",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
-# ── Styling ───────────────────────────────────────────────────────────────────
-st.markdown(
-    """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-.block-container { padding-top: 1.5rem; max-width: 1200px; }
-.hero {
-  background: linear-gradient(135deg, #0d3b2e 0%, #00d09c 55%, #00a67e 100%);
-  border-radius: 16px; padding: 2rem 2.2rem; color: #fff; margin-bottom: 1.5rem;
-  box-shadow: 0 8px 32px rgba(0, 166, 126, 0.25);
-}
-.hero h1 { margin: 0; font-size: 1.85rem; font-weight: 700; letter-spacing: -0.02em; }
-.hero p { margin: 0.5rem 0 0; opacity: 0.92; font-size: 1rem; }
-div[data-testid="stMetric"] {
-  background: #f8faf9; border: 1px solid #e8efec; border-radius: 12px;
-  padding: 0.75rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-div[data-testid="stMetric"] label { color: #5f6f6b; font-size: 0.8rem; }
-div[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #0d3b2e; }
-.review-card {
-  background: #fff; border: 1px solid #e8efec; border-radius: 12px;
-  padding: 1rem 1.15rem; margin-bottom: 0.75rem;
-  border-left: 4px solid #00a67e;
-}
-.review-card.negative { border-left-color: #e85d4c; }
-.review-card .stars { color: #f5a623; font-size: 0.95rem; margin-bottom: 0.35rem; }
-.review-card .meta { color: #7a8a86; font-size: 0.78rem; margin-bottom: 0.5rem; }
-.review-card .text { color: #1a2e28; font-size: 0.92rem; line-height: 1.45; }
-.quote-card {
-  background: linear-gradient(180deg, #f0faf6 0%, #fff 100%);
-  border-radius: 12px; padding: 1rem 1.2rem; border: 1px solid #d4ebe3;
-  font-style: italic; color: #2d4a42;
-}
-.pipeline-pill {
-  display: inline-block; padding: 0.2rem 0.65rem; border-radius: 999px;
-  font-size: 0.75rem; font-weight: 600; margin-right: 0.35rem;
-}
-.pill-done { background: #d4f5e8; color: #0d5c40; }
-.pill-run { background: #fff3cd; color: #856404; }
-.pill-err { background: #fde8e6; color: #9b2c2c; }
-.pill-skip { background: #eef1f0; color: #5f6f6b; }
-#MainMenu {visibility: hidden;} footer {visibility: hidden;}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-
-def stars_html(rating: int) -> str:
-    filled = "★" * rating + "☆" * (5 - rating)
-    return f'<span class="stars">{filled}</span>'
-
-
-def review_card(review: dict, negative: bool = False) -> str:
-    date_str = html.escape((review.get("date") or "")[:10])
-    raw = review.get("text") or review.get("title") or ""
-    if len(raw) > 280:
-        raw = raw[:277] + "…"
-    text = html.escape(raw)
-    rating = review.get("rating", 0)
-    css = "review-card negative" if negative else "review-card"
-    return (
-        f'<div class="{css}">'
-        f'{stars_html(rating)}'
-        f'<div class="meta">{date_str} · Google Play · {rating}/5</div>'
-        f'<div class="text">{text}</div></div>'
-    )
+inject_styles()
 
 
 def doc_url_from_id(doc_id: str | None) -> str | None:
@@ -151,38 +95,25 @@ def doc_url_from_id(doc_id: str | None) -> str | None:
 def run_background_pipeline(db_path: str) -> None:
     from shared.pipeline_runner import run_full_pipeline
 
-    steps = {i: "running" for i in range(1, 5)}
+    steps = {i: "pending" for i in range(1, 5)}
     status_box = st.sidebar.empty()
 
     def on_step(phase: int, label: str, state: str) -> None:
         steps[phase] = state
-        pills = []
-        labels = {
-            1: "Collect",
-            2: "Analyze",
-            3: "Doc",
-            4: "Email",
-        }
+        icons = {1: "📥", 2: "🧠", 3: "📄", 4: "✉️"}
+        lines = []
         for n in range(1, 5):
             s = steps.get(n, "pending")
-            cls = {
-                "done": "pill-done",
-                "running": "pill-run",
-                "error": "pill-err",
-                "skipped": "pill-skip",
-            }.get(s, "pill-skip")
-            pills.append(f'<span class="pipeline-pill {cls}">{labels[n]}</span>')
-        status_box.markdown(
-            "**Background sync**<br>" + "".join(pills),
-            unsafe_allow_html=True,
-        )
+            mark = {"done": "✅", "running": "⏳", "error": "❌", "skipped": "⏭️"}.get(s, "○")
+            lines.append(f"{mark} {icons[n]} {['Collect', 'Analyze', 'Doc', 'Email'][n-1]}")
+        status_box.markdown("**Pipeline**\n\n" + "\n\n".join(lines))
 
-    with st.spinner("Updating reviews and insights in the background…"):
+    with st.spinner("Syncing reviews & insights…"):
         result = run_full_pipeline(database_path=db_path, on_step=on_step)
 
     st.session_state["pipeline_result"] = result
     st.session_state["pipeline_done"] = True
-    st.session_state["last_sync"] = datetime.now().isoformat(timespec="seconds")
+    st.session_state["last_sync"] = datetime.now().strftime("%d %b %Y, %H:%M")
 
 
 def load_dashboard(db_path: str) -> dict:
@@ -190,49 +121,56 @@ def load_dashboard(db_path: str) -> dict:
 
     db = DatabaseManager(db_path)
     try:
-        insights = db.get_insights()
-        total = db.get_review_count()
-        positive = db.get_top_reviews(limit=6, mode="positive")
-        negative = db.get_top_reviews(limit=6, mode="negative")
-        recent = db.get_top_reviews(limit=6, mode="recent")
-        rating_dist = db.get_rating_distribution()
         return {
-            "insights": insights,
-            "total": total,
-            "positive": positive,
-            "negative": negative,
-            "recent": recent,
-            "rating_dist": rating_dist,
+            "insights": db.get_insights(),
+            "total": db.get_review_count(),
+            "positive": db.get_top_reviews(limit=8, mode="positive"),
+            "negative": db.get_top_reviews(limit=8, mode="negative"),
+            "recent": db.get_top_reviews(limit=8, mode="recent"),
+            "rating_dist": db.get_rating_distribution(),
         }
     finally:
         db.close()
 
 
-# ── Sidebar: background sync only ───────────────────────────────────────────
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### Settings")
+    st.markdown("### ⚙️ Control panel")
+    st.caption("Data syncs automatically. Use refresh to pull latest Play Store reviews.")
     if not config_value("GROQ_API_KEY"):
-        st.error("Add **GROQ_API_KEY** to Streamlit secrets.")
-    if st.button("Refresh data", type="primary", use_container_width=True):
+        st.error("Add **GROQ_API_KEY** in Streamlit secrets.")
+    else:
+        st.success("Groq API connected")
+    if st.button("🔄 Refresh all data", type="primary", use_container_width=True):
         st.session_state["pipeline_done"] = False
         st.session_state["force_refresh"] = True
         st.rerun()
     if st.session_state.get("last_sync"):
-        st.caption(f"Last sync: {st.session_state['last_sync']}")
+        st.markdown(f"**Last sync**  \n{st.session_state['last_sync']}")
+    with st.expander("Setup checklist"):
+        st.markdown(
+            """
+            - `GROQ_API_KEY`
+            - `GOOGLE_TOKEN_JSON`
+            - `GOOGLE_DOC_ID`
+            - `EMAIL_RECIPIENT`
+            """
+        )
 
 from shared.db_paths import resolve_database_path
 
 db_path = resolve_database_path(config_value("DATABASE_PATH") or None)
 os.environ["DATABASE_PATH"] = db_path
 
-# Auto background pipeline when no insights or forced refresh
 data = load_dashboard(db_path)
 needs_pipeline = (
     data["insights"] is None
     or data["total"] == 0
     or st.session_state.get("force_refresh")
 )
+syncing = False
 if needs_pipeline and config_value("GROQ_API_KEY") and not st.session_state.get("pipeline_done"):
+    syncing = True
     run_background_pipeline(db_path)
     st.session_state.pop("force_refresh", None)
     st.rerun()
@@ -246,122 +184,77 @@ neu = sentiment.get("neutral", 0)
 week = insights.get("week", "—")
 doc_url = doc_url_from_id(insights.get("doc_id"))
 email_id = insights.get("email_id")
+pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME", "com.groww")
+play_url = f"https://play.google.com/store/apps/details?id={pkg}"
 
-# ── Hero ──────────────────────────────────────────────────────────────────────
-st.markdown(
-    f"""
-<div class="hero">
-  <h1>Groww App Review Insights</h1>
-  <p>Weekly pulse from Google Play · Week <strong>{week}</strong> ·
-  Pipeline runs automatically — no manual steps required.</p>
-</div>
-""",
-    unsafe_allow_html=True,
+# ── Main dashboard ────────────────────────────────────────────────────────────
+render_topbar(week, syncing=syncing)
+render_kpis(
+    data["total"],
+    insights.get("total_reviews_analysed", 0),
+    pos,
+    neg,
+    neu,
 )
 
-# ── KPIs ──────────────────────────────────────────────────────────────────────
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Reviews in DB", data["total"])
-c2.metric("Analysed", insights.get("total_reviews_analysed", 0))
-c3.metric("Positive", pos)
-c4.metric("Negative", neg)
-c5.metric("Neutral", neu)
+chart_left, chart_mid, chart_right = st.columns([1.1, 1.1, 1], gap="large")
 
-# ── Charts + themes ───────────────────────────────────────────────────────────
-left, right = st.columns([1, 1])
+with chart_left:
+    st.markdown('<div class="panel"><div class="panel-title">Sentiment mix</div>', unsafe_allow_html=True)
+    if pos + neg + neu > 0:
+        st.plotly_chart(sentiment_donut(pos, neg, neu), use_container_width=True, config={"displayModeBar": False})
+    else:
+        st.caption("Run refresh to load sentiment data.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-with left:
-    st.subheader("Rating distribution")
+with chart_mid:
+    st.markdown('<div class="panel"><div class="panel-title">Star ratings</div>', unsafe_allow_html=True)
     if sum(data["rating_dist"].values()):
-        st.bar_chart(data["rating_dist"])
+        st.plotly_chart(rating_bars(data["rating_dist"]), use_container_width=True, config={"displayModeBar": False})
     else:
-        st.info("Collecting reviews… run Refresh in the sidebar if this stays empty.")
+        st.caption("No ratings yet.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-with right:
-    st.subheader("Top themes")
-    themes = insights.get("themes") or []
-    if themes:
-        for i, theme in enumerate(themes[:5], 1):
-            sent = theme.get("sentiment", "neutral")
-            icon = {"positive": "🟢", "negative": "🔴", "neutral": "🟡"}.get(sent, "⚪")
-            st.markdown(
-                f"**{i}. {theme.get('name', 'Theme')}** {icon}  \n"
-                f"{theme.get('review_count', 0)} reviews · {sent}"
-            )
-    else:
-        st.caption("Themes appear after background analysis completes.")
+with chart_right:
+    st.markdown('<div class="panel"><div class="panel-title">Theme leaderboard</div>', unsafe_allow_html=True)
+    render_themes(insights.get("themes") or [])
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# ── Top reviews ───────────────────────────────────────────────────────────────
-st.subheader("Top reviews")
+st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("### 💬 Voice of the customer")
+
 tab_pos, tab_neg, tab_recent, tab_quotes = st.tabs(
-    ["Top positive", "Top critical", "Most recent", "AI highlights"]
+    ["🌟 Top positive", "⚠️ Critical", "🕐 Recent", "✨ AI picks"]
 )
 
 with tab_pos:
-    if data["positive"]:
-        st.markdown("".join(review_card(r) for r in data["positive"]), unsafe_allow_html=True)
-    else:
-        st.caption("No positive reviews yet.")
-
+    render_reviews_grid(data["positive"])
 with tab_neg:
-    if data["negative"]:
-        st.markdown(
-            "".join(review_card(r, negative=True) for r in data["negative"]),
-            unsafe_allow_html=True,
-        )
-    else:
-        st.caption("No critical reviews yet.")
-
+    render_reviews_grid(data["negative"], negative=True)
 with tab_recent:
-    if data["recent"]:
-        st.markdown("".join(review_card(r) for r in data["recent"]), unsafe_allow_html=True)
-    else:
-        st.caption("No reviews yet.")
-
+    render_reviews_grid(data["recent"])
 with tab_quotes:
-    quotes = insights.get("quotes") or []
-    if quotes:
-        for q in quotes:
-            qt = html.escape(q.get("text", ""))
-            tn = html.escape(q.get("theme_name", ""))
-            st.markdown(
-                f'<div class="quote-card">"{qt}"<br><br>'
-                f'<small>{q.get("rating", "?")}★ · {tn}</small></div>',
-                unsafe_allow_html=True,
-            )
-    else:
-        st.caption("Representative quotes appear after analysis.")
+    render_quotes(insights.get("quotes") or [])
 
-# ── Actions + links ───────────────────────────────────────────────────────────
-st.subheader("Recommended actions")
-actions = insights.get("actions") or []
-if actions:
-    for action in actions:
-        pri = (action.get("priority") or "medium").upper()
-        st.markdown(f"**[{pri}]** {action.get('description', '')}")
-else:
-    st.caption("Action items will show after analysis.")
+st.markdown("### 🎯 Product actions")
+render_actions(insights.get("actions") or [])
 
-link1, link2, link3 = st.columns(3)
-with link1:
+btn1, btn2, btn3 = st.columns(3)
+with btn1:
     if doc_url:
-        st.link_button("Open weekly report (Google Doc)", doc_url, use_container_width=True)
+        st.link_button("📄 Open Google Doc report", doc_url, use_container_width=True, type="primary")
     else:
-        st.caption("Google Doc link available after Phase 3 sync.")
-with link2:
+        st.button("📄 Google Doc (pending)", disabled=True, use_container_width=True)
+with btn2:
     if email_id:
-        st.success("Gmail draft created — check **Drafts** in Gmail.")
+        st.success("✉️ Gmail draft ready — open **Drafts**")
     else:
-        st.caption("Gmail draft after sync (needs EMAIL_RECIPIENT).")
-with link3:
-    pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME", "com.groww")
-    st.link_button(
-        "View on Play Store",
-        f"https://play.google.com/store/apps/details?id={pkg}",
-        use_container_width=True,
-    )
+        st.info("✉️ Gmail draft after EMAIL_RECIPIENT is set")
+with btn3:
+    st.link_button("📱 View on Play Store", play_url, use_container_width=True)
 
-# Pipeline result (collapsed detail)
+render_cta_strip(doc_url, email_id, play_url)
+
 if st.session_state.get("pipeline_result"):
-    with st.expander("Background sync log"):
+    with st.expander("🔧 Sync log (technical)"):
         st.json(st.session_state["pipeline_result"])
