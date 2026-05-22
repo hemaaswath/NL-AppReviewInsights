@@ -1,9 +1,12 @@
-# Secrets and local config
+# Secrets and local config (NEVER commit these — use Streamlit Cloud UI only)
 .env
-.env.local
+.env.*
 !.env.example
+.env.local
 .streamlit/secrets.toml
 .streamlit/secrets_export.txt
+**/secrets.toml
+!**/.streamlit/secrets.toml.example
 
 # Google OAuth (any path)
 **/credentials.json
