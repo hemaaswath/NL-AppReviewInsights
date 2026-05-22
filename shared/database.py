@@ -239,6 +239,39 @@ class DatabaseManager:
                 return True
             return False
     
+    def get_top_reviews(
+        self,
+        limit: int = 8,
+        mode: str = "positive",
+        source: Optional[str] = None,
+    ) -> list[dict]:
+        """Return top reviews for dashboard display.
+
+        mode: positive (4–5★), negative (1–2★), recent (all, newest first)
+        """
+        with self.get_session() as session:
+            query = session.query(ReviewModel)
+            if source:
+                query = query.filter_by(source=source)
+            if mode == "positive":
+                query = query.filter(ReviewModel.rating >= 4)
+            elif mode == "negative":
+                query = query.filter(ReviewModel.rating <= 2)
+            query = query.order_by(ReviewModel.date.desc()).limit(limit)
+            return [review.to_dict() for review in query.all()]
+
+    def get_rating_distribution(self, source: Optional[str] = None) -> dict[int, int]:
+        """Count reviews per star rating (1–5)."""
+        dist = {i: 0 for i in range(1, 6)}
+        with self.get_session() as session:
+            query = session.query(ReviewModel)
+            if source:
+                query = query.filter_by(source=source)
+            for row in query.all():
+                if 1 <= row.rating <= 5:
+                    dist[row.rating] += 1
+        return dist
+
     def get_review_count(self, source: Optional[str] = None) -> int:
         """Get total review count.
         

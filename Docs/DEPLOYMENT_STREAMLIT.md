@@ -72,7 +72,7 @@ Your `.env` at the repo root is loaded automatically; local `token.json` is used
    | `DATABASE_PATH` | Optional (`data/reviews.db`) |
    | `GOOGLE_CREDENTIALS_JSON` | Optional |
 
-6. **Deploy**. Open the app URL and use **Run pipeline** tabs.
+6. **Deploy**. Open the app URL — the **dashboard** loads automatically; phases 1–4 run in the **background** when data is missing. Use sidebar **Refresh data** to re-sync.
 
 ---
 
