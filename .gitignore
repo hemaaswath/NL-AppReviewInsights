@@ -2,6 +2,8 @@
 .env
 .env.local
 !.env.example
+.streamlit/secrets.toml
+.streamlit/secrets_export.txt
 
 # Google OAuth (any path)
 **/credentials.json

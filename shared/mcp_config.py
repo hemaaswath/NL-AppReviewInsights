@@ -16,3 +16,12 @@ def resolve_mcp_server_url(specific_url: Optional[str] = None) -> str:
         or DEFAULT_MCP_SERVER_URL
     )
     return url.rstrip("/")
+
+
+def use_direct_google() -> bool:
+    """Use in-process Google APIs instead of saksham-mcp-server HTTP."""
+    if os.getenv("USE_DIRECT_GOOGLE", "").lower() in {"1", "true", "yes"}:
+        return True
+    if os.getenv("STREAMLIT_DEPLOYMENT", "").lower() in {"1", "true", "yes"}:
+        return True
+    return False

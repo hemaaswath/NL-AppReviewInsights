@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from dotenv import load_dotenv
 
-from shared.mcp_config import resolve_mcp_server_url
+from shared.mcp_config import resolve_mcp_server_url, use_direct_google
+from shared import google_direct
 
 load_dotenv()
 
@@ -35,8 +36,11 @@ class GoogleDocsClient:
         Returns:
             dict with doc_id, doc_url, source, title, created_at
         """
+        doc_id = os.getenv("GOOGLE_DOC_ID", "").strip()
+        if doc_id and use_direct_google():
+            return self._append_via_direct(doc_id, title, content)
+
         if self._is_mcp_available():
-            doc_id = os.getenv("GOOGLE_DOC_ID", "").strip()
             if doc_id:
                 return self._append_via_mcp(doc_id, title, content)
             print(
@@ -61,6 +65,24 @@ class GoogleDocsClient:
         except Exception:
             self._available = False
         return self._available
+
+    def _append_via_direct(self, doc_id: str, title: str, content: str) -> dict:
+        """Call Google Docs API in-process (Streamlit / USE_DIRECT_GOOGLE)."""
+        formatted = f"# {title}\n\n{content}" if title else content
+        data = google_direct.append_to_doc(doc_id, formatted)
+        if data.get("status") == "error":
+            raise RuntimeError(
+                data.get("message", "append_to_doc failed")
+                + (f": {data.get('details', '')}" if data.get("details") else "")
+            )
+        resolved_id = data.get("document_id") or doc_id
+        return {
+            "doc_id": resolved_id,
+            "doc_url": self.get_document_url(resolved_id),
+            "source": "google_docs",
+            "title": title,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     def _append_via_mcp(self, doc_id: str, title: str, content: str) -> dict:
         """POST /append_to_doc — appends timestamped content to an existing doc."""

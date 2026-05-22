@@ -18,10 +18,22 @@
 
 ## Before each demo run
 
+### Option A — Streamlit (recommended for deploy)
+
+```powershell
+cd App-Review-Insights-Analyser
+.\scripts\export_streamlit_secrets.ps1
+streamlit run streamlit_app.py
+```
+
+Or deploy to [Streamlit Cloud](https://share.streamlit.io) — see `Docs/DEPLOYMENT_STREAMLIT.md` (no MCP server needed).
+
+### Option B — Local terminal + MCP
+
 **Terminal 1 — MCP server**
 
 ```powershell
-cd C:\Users\ashhe\OneDrive\Documents\Nextleap\App-Review-Insights-Analyser\MCPServer\saksham-mcp-server
+cd App-Review-Insights-Analyser\MCPServer\saksham-mcp-server
 $env:AUTO_APPROVE="true"
 python -m uvicorn server:app --host 127.0.0.1 --port 8000
 ```
@@ -29,7 +41,7 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 **Terminal 2 — pipeline**
 
 ```powershell
-cd C:\Users\ashhe\OneDrive\Documents\Nextleap\App-Review-Insights-Analyser
+cd App-Review-Insights-Analyser
 python run_pipeline.py
 ```
 
