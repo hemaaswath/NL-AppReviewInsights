@@ -38,7 +38,52 @@ If you ever committed a real `.env` once (even if deleted later), treat keys as 
 
 ---
 
-## Root cause we fixed (May 2026)
+## Root cause (fixed permanently)
+
+1. **OAuth files inside the repo folder** — the app used to write `credentials.json` under `MCPServer/`. Git then showed them as modified; `git add .` could push them.
+2. **Fix:** Secrets live only in **`%LOCALAPPDATA%\groww-insights\`** (outside the repo). On every app start, `purge_repo_secrets.py` **deletes** any `token.json` / `credentials.json` / `secrets.toml` found under the project folder.
+3. **MCP server folder** is no longer tracked by git (`MCPServer/saksham-mcp-server/` is gitignored). Clone it locally if needed.
+
+**Streamlit Cloud secrets** are on share.streamlit.io — **not** in the GitHub repo. Deleting files on GitHub does not remove Streamlit secrets.
+
+---
+
+## Where secrets live (never GitHub)
+
+| Secret | Location |
+|--------|----------|
+| Groq, doc ID, email | Local `.env` (gitignored) or **Streamlit Cloud → Secrets** |
+| Google OAuth | **`%LOCALAPPDATA%\groww-insights\token.json`** (outside repo) |
+| Google client JSON | **`%LOCALAPPDATA%\groww-insights\credentials.json`** |
+| Export helper | `.streamlit/secrets_export.txt` (gitignored) — paste into Streamlit UI only |
+
+---
+
+## One-time setup on your PC
+
+```powershell
+.\scripts\install_git_hooks.ps1
+python scripts/purge_repo_secrets.py
+```
+
+If GitHub ever had tracked secrets:
+
+```powershell
+python scripts/untrack_secrets.py
+git commit -m "Stop tracking secret files"
+```
+
+**Always push with:**
+
+```powershell
+.\scripts\safe_git_push.ps1
+```
+
+**Never:** `git add .`
+
+---
+
+## Root cause we fixed earlier (May 2026)
 
 Running the app **used to write** `GOOGLE_CREDENTIALS_JSON` into  
 `MCPServer/saksham-mcp-server/credentials.json` inside the repo. That made git show

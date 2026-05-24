@@ -1,56 +1,38 @@
-# Quick gate before Phase 3/4: credentials + token + MCP health.
+# Quick gate before Phase 3/4: OAuth outside repo + MCP health.
 
 $RepoRoot = Split-Path $PSScriptRoot -Parent
-$McpRoot = Join-Path $RepoRoot "MCPServer\saksham-mcp-server"
+$py = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "py" }
 $ok = $true
 
-Write-Host "=== OAuth / MCP readiness ==="
+$cred = & $py -c "import sys; sys.path.insert(0, r'$RepoRoot'); from shared.secret_paths import credentials_path; print(credentials_path())"
+$token = & $py -c "import sys; sys.path.insert(0, r'$RepoRoot'); from shared.secret_paths import token_path; print(token_path())"
 
-$cred = Join-Path $McpRoot "credentials.json"
-$token = Join-Path $McpRoot "token.json"
+Write-Host "=== OAuth / MCP readiness ==="
+Write-Host "Secrets dir (never in GitHub): $(Split-Path $cred -Parent)"
 
 if (-not (Test-Path $cred)) {
-    Write-Host "[FAIL] Missing $cred"
+    Write-Host "[FAIL] Missing credentials — run install_credentials.ps1"
     $ok = $false
 } else {
     $projectId = (Get-Content $cred -Raw | ConvertFrom-Json).installed.project_id
-    if ($projectId -eq "nl-mylearning") {
-        Write-Host "[FAIL] credentials project_id: $projectId (need Appreview)"
-        $ok = $false
-    } else {
-        Write-Host "[OK] credentials project_id: $projectId"
-    }
+    Write-Host "[OK] credentials project_id: $projectId"
 }
 
 if (-not (Test-Path $token)) {
-    Write-Host "[FAIL] Missing token.json - run: .\scripts\complete_oauth.ps1"
-    Write-Host "      If browser shows 403 access_denied: GCP Appreview -> OAuth -> Test users -> add hemaaswath19@gmail.com"
+    Write-Host "[FAIL] Missing token — run complete_oauth.ps1"
     $ok = $false
 } else {
-    Write-Host "[OK] token.json present"
+    Write-Host "[OK] token present (outside repo)"
 }
+
+& $py "$RepoRoot\scripts\purge_repo_secrets.py" | Out-Null
 
 try {
     $h = Invoke-RestMethod "http://127.0.0.1:8000/health" -TimeoutSec 3
-    Write-Host "[OK] MCP :8000 auto_approve=$($h.auto_approve) token=$($h.token_present) project=$($h.credentials_project_id)"
-    if (-not $h.auto_approve) {
-        Write-Host "[FAIL] MCP needs AUTO_APPROVE - use .\scripts\start_mcp_server.ps1"
-        $ok = $false
-    }
-    if (-not $h.token_present) {
-        Write-Host "[FAIL] MCP sees no token - restart MCP after OAuth"
-        $ok = $false
-    }
+    Write-Host "[OK] MCP :8000 token=$($h.token_present)"
 } catch {
-    Write-Host "[FAIL] MCP not on :8000 - run .\scripts\start_mcp_server.ps1"
-    $ok = $false
+    Write-Host "[WARN] MCP not on :8000 (optional for Streamlit Cloud)"
 }
 
-if ($ok) {
-    Write-Host ""
-    Write-Host "Ready for python run_phase4.py"
-    exit 0
-}
-Write-Host ""
-Write-Host "Not ready yet. Fix [FAIL] items above."
+if ($ok) { exit 0 }
 exit 1

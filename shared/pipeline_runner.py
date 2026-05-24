@@ -12,7 +12,15 @@ from typing import Callable, Optional
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _ensure_no_repo_secrets() -> None:
+    sys.path.insert(0, str(ROOT))
+    from shared.secret_paths import ensure_secrets_outside_repo
+
+    ensure_secrets_outside_repo()
+
+
 def _run_collect() -> dict:
+    _ensure_no_repo_secrets()
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     proc = subprocess.run(
         [sys.executable, str(ROOT / "run_gp_collect.py")],

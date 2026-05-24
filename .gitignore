@@ -14,13 +14,14 @@ service-account*.json
 !**/.streamlit/secrets.toml.example
 !**/*secrets.toml.example
 
-# Google OAuth (any path in repo or submodule)
+# Google OAuth — never inside the repo (use %LOCALAPPDATA%\groww-insights\)
 **/credentials.json
 **/token.json
 **/.oauth_client_id
 **/oauth_authorize_url.txt
-MCPServer/**/credentials.json
-MCPServer/**/token.json
+
+# MCP server clone (local only — not tracked; OAuth stays outside repo)
+MCPServer/saksham-mcp-server/
 
 # Python
 venv/

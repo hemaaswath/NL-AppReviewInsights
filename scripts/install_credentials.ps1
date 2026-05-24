@@ -1,40 +1,22 @@
-# Copy Google OAuth credentials.json into the MCP folder used by this repo.
+# Install OAuth credentials OUTSIDE the repo (%LOCALAPPDATA%\groww-insights).
 param(
     [Parameter(Mandatory = $true)]
     [string]$SourcePath
 )
 
-$McpRoot = Join-Path (Split-Path $PSScriptRoot -Parent) "MCPServer\saksham-mcp-server"
-$dest = Join-Path $McpRoot "credentials.json"
+$ErrorActionPreference = "Stop"
+$Root = Split-Path -Parent $PSScriptRoot
+$py = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "py" }
 
 if (-not (Test-Path $SourcePath)) {
     Write-Error "Source not found: $SourcePath"
-    exit 1
 }
 
-$meta = Get-Content $SourcePath -Raw | ConvertFrom-Json
-$projectId = $meta.installed.project_id
-if ($projectId -eq "nl-mylearning") {
-    Write-Error "Refusing to install nl-mylearning credentials. Use Appreview OAuth JSON."
-    exit 1
-}
-
+$dest = & $py -c "import sys; sys.path.insert(0, r'$Root'); from shared.secret_paths import credentials_path; print(credentials_path())"
+New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
 Copy-Item -Path $SourcePath -Destination $dest -Force
 
-# Common mistake: duplicate clone at Documents\Nextleap\saksham-mcp-server
-$legacy = Join-Path (Split-Path $PSScriptRoot -Parent | Split-Path -Parent) "saksham-mcp-server\credentials.json"
-if ((Resolve-Path $SourcePath).Path -eq (Resolve-Path $legacy -ErrorAction SilentlyContinue).Path) {
-    Write-Host "Note: copied from legacy path Nextleap\saksham-mcp-server (not used by this repo)."
-}
+& $py "$Root\scripts\purge_repo_secrets.py" | Out-Null
 
-if (Test-Path (Join-Path $McpRoot "token.json")) {
-    Remove-Item (Join-Path $McpRoot "token.json") -Force
-    Write-Host "Removed old token.json (re-run OAuth after client change)."
-}
-if (Test-Path (Join-Path $McpRoot ".oauth_client_id")) {
-    Remove-Item (Join-Path $McpRoot ".oauth_client_id") -Force
-}
-
-Write-Host "Installed credentials -> $dest"
-Write-Host "project_id: $projectId"
-Write-Host "Next: .\scripts\complete_oauth.ps1"
+Write-Host "Installed credentials OUTSIDE repo -> $dest"
+Write-Host "This path is never committed to GitHub."

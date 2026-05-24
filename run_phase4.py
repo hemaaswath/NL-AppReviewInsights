@@ -12,7 +12,9 @@ sys.path.insert(0, "phase-4/src")
 from shared.mcp_config import resolve_mcp_server_url, use_direct_google
 from distribution_orchestrator import DistributionOrchestrator
 
-MCP_TOKEN = Path("MCPServer/saksham-mcp-server/token.json")
+from shared.secret_paths import token_path
+
+MCP_TOKEN = token_path()
 
 
 def _preflight() -> None:

@@ -26,6 +26,11 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / ".env", override=False)
 os.environ.setdefault("GOOGLE_CREDENTIALS_JSON_OVERWRITE", "0")
 
+# Remove any OAuth files from repo tree; migrate to %LOCALAPPDATA%\groww-insights
+from shared.secret_paths import ensure_secrets_outside_repo  # noqa: E402
+
+ensure_secrets_outside_repo()
+
 SECRET_KEYS = (
     "GROQ_API_KEY",
     "GOOGLE_PLAY_PACKAGE_NAME",

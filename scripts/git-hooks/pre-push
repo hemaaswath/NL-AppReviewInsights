@@ -1,21 +1,21 @@
 #!/bin/sh
-# Block push if commits contain secret paths or secret content.
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT" || exit 1
 
 _run() {
   if command -v python >/dev/null 2>&1; then
-    python "$ROOT/scripts/$1"
+    python "$ROOT/scripts/$1" || exit 1
   elif command -v py >/dev/null 2>&1; then
-    py "$ROOT/scripts/$1"
+    py "$ROOT/scripts/$1" || exit 1
   else
     echo "pre-push: install Python"
     exit 1
   fi
 }
 
-_run secret_scan.py push || exit 1
-_run secret_scan.py tracked || exit 1
-_run guard_repo_secrets.py || exit 1
+_run purge_repo_secrets.py
+_run secret_scan.py push
+_run secret_scan.py tracked
+_run repo_git_guard.py
 
 exit 0
