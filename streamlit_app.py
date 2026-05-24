@@ -180,7 +180,9 @@ def _pipeline_callbacks():
     return on_step
 
 
-def run_sync_pipeline(db_path: str, *, clear_first: bool, phase: str) -> None:
+def run_sync_pipeline(
+    db_path: str, *, clear_first: bool, phase: str, collect_fast: bool = False
+) -> dict:
     from shared.database import DatabaseManager
     from shared.pipeline_runner import run_dashboard_pipeline, run_publish_phases
 
@@ -194,9 +196,13 @@ def run_sync_pipeline(db_path: str, *, clear_first: bool, phase: str) -> None:
 
     on_step = _pipeline_callbacks()
     if phase == "data":
-        with st.spinner("Fetching live Play Store reviews…"):
+        label = "Checking for new reviews…" if collect_fast else "Fetching live Play Store reviews…"
+        with st.spinner(label):
             result = run_dashboard_pipeline(
-                database_path=db_path, on_step=on_step, include_publish=False
+                database_path=db_path,
+                on_step=on_step,
+                include_publish=False,
+                collect_fast=collect_fast,
             )
     else:
         with st.spinner("Publishing report & email draft…"):
@@ -205,6 +211,7 @@ def run_sync_pipeline(db_path: str, *, clear_first: bool, phase: str) -> None:
     load_dashboard_cached.clear()
     st.session_state["pipeline_result"] = result
     st.session_state["last_sync"] = datetime.now().strftime("%d %b %Y · %H:%M")
+    return result
 
 
 def render_dashboard(data: dict, *, data_source: str, play_url: str) -> None:
@@ -327,6 +334,34 @@ def render_dashboard(data: dict, *, data_source: str, play_url: str) -> None:
         st.link_button("View on Play Store", play_url, use_container_width=True)
 
 
+play_url = f"https://play.google.com/store/apps/details?id={play_pkg}"
+
+# Manual refresh — incremental collect; skip Groq when nothing new (before sidebar)
+if st.session_state.get("force_refresh") and _analysis_configured():
+    if not _pkg_ok:
+        st.error(f"Cannot sync: {_pkg_info}")
+        st.stop()
+    pre_snap = load_dashboard_cached(db_path, _db_mtime(db_path))
+    result = run_sync_pipeline(
+        db_path,
+        clear_first=False,
+        phase="data",
+        collect_fast=has_live_data(pre_snap),
+    )
+    st.session_state["force_refresh"] = False
+    if result.get("data_changed"):
+        st.session_state.pop("sync_message", None)
+        if _next_sync_phase("data"):
+            st.session_state["sync_phase"] = "publish"
+        st.rerun()
+    else:
+        new_n = int(result.get("new_reviews", 0))
+        st.session_state["sync_message"] = (
+            f"Already up to date — {new_n} new review(s) since last check."
+        )
+        st.session_state["sync_phase"] = None
+
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     render_sidebar_brand()
@@ -354,25 +389,16 @@ with st.sidebar:
         st.caption("Dashboard loads instantly; live sync runs automatically when needed.")
     if st.button("Refresh insights", type="primary", use_container_width=True):
         st.session_state["force_refresh"] = True
-        st.session_state["sync_phase"] = "data"
+        st.session_state.pop("sync_message", None)
         st.rerun()
-    render_sidebar_sync(st.session_state.get("last_sync"))
+    render_sidebar_sync(
+        st.session_state.get("last_sync"),
+        st.session_state.get("sync_message"),
+    )
     if not _analysis_configured():
         st.warning("Live sync unavailable. Bundled snapshot still displays.")
 
-play_url = f"https://play.google.com/store/apps/details?id={play_pkg}"
-
-# Manual full refresh
-if st.session_state.get("force_refresh") and _analysis_configured():
-    if not _pkg_ok:
-        st.error(f"Cannot sync: {_pkg_info}")
-        st.stop()
-    run_sync_pipeline(db_path, clear_first=True, phase="data")
-    st.session_state["force_refresh"] = False
-    st.session_state["sync_phase"] = _next_sync_phase("data")
-    st.rerun()
-
-# Bootstrap auto-sync when live DB is empty (Streamlit Cloud cold start)
+# Bootstrap auto-sync when live DB is empty (local dev only)
 live_snap = load_dashboard_cached(db_path, _db_mtime(db_path))
 if has_live_data(live_snap):
     data, data_source = live_snap, "live"
@@ -392,9 +418,19 @@ sync_phase = st.session_state.get("sync_phase")
 if sync_phase and _analysis_configured() and _pkg_ok:
     try:
         if sync_phase == "data":
-            run_sync_pipeline(db_path, clear_first=False, phase="data")
-            st.session_state["sync_phase"] = _next_sync_phase("data")
-            st.rerun()
+            pre_snap = load_dashboard_cached(db_path, _db_mtime(db_path))
+            result = run_sync_pipeline(
+                db_path,
+                clear_first=False,
+                phase="data",
+                collect_fast=has_live_data(pre_snap),
+            )
+            if result.get("data_changed") and _next_sync_phase("data"):
+                st.session_state["sync_phase"] = "publish"
+            else:
+                st.session_state["sync_phase"] = None
+            if result.get("data_changed"):
+                st.rerun()
         elif sync_phase == "publish":
             run_sync_pipeline(db_path, clear_first=False, phase="publish")
             st.session_state["sync_phase"] = None

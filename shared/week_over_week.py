@@ -6,12 +6,12 @@ from __future__ import annotations
 from typing import Any, Optional
 
 
-def _iso_week_sort_key(week: str) -> tuple[int, int]:
-    try:
-        year_s, w_s = week.upper().split("-W")
-        return int(year_s), int(w_s)
-    except ValueError:
-        return (0, 0)
+def current_iso_week() -> str:
+    """Return ISO week string e.g. '2026-W21'."""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    return f"{now.isocalendar().year}-W{now.isocalendar().week:02d}"
 
 
 def previous_week_id(week: str) -> str:

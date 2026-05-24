@@ -314,7 +314,9 @@ def render_sidebar_brand() -> None:
     )
 
 
-def render_sidebar_sync(last_sync: str | None) -> None:
+def render_sidebar_sync(last_sync: str | None, message: str | None = None) -> None:
+    if message:
+        st.caption(message)
     if last_sync:
         st.markdown(
             f'<div class="sync-time"><strong>Last updated</strong>{html.escape(last_sync)}</div>',
