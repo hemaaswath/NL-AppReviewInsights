@@ -21,28 +21,10 @@ os.environ.setdefault("USE_DIRECT_GOOGLE", "1")
 import streamlit as st
 from dotenv import load_dotenv
 
-from frontend.dashboard_ui import (
-    inject_styles,
-    product_map_chart,
-    rating_bars,
-    render_actions,
-    render_deliverables,
-    render_hero,
-    render_kpis,
-    render_quotes,
-    render_reviews_grid,
-    render_section_head,
-    render_sidebar_brand,
-    render_sidebar_sync,
-    render_pipeline_steps,
-    render_themes,
-    render_wow_pulse,
-    sentiment_donut,
-)
-from shared.groww_product_map import themes_to_area_counts
-from shared.week_over_week import compute_week_over_week
+load_dotenv(ROOT / ".env", override=False)
 
-load_dotenv(ROOT / ".env")
+# Never persist Streamlit / .env secrets into repo files (see shared/google_auth.py)
+os.environ.setdefault("GOOGLE_CREDENTIALS_JSON_OVERWRITE", "0")
 
 SECRET_KEYS = (
     "GROQ_API_KEY",
@@ -72,7 +54,6 @@ def apply_streamlit_secrets() -> None:
 
 
 def config_value(key: str, default: str = "") -> str:
-    apply_streamlit_secrets()
     return _clean_secret_value(os.getenv(key, default))
 
 
@@ -80,7 +61,12 @@ def _analysis_configured() -> bool:
     return bool(config_value("GROQ_API_KEY"))
 
 
-apply_streamlit_secrets()
+def _db_mtime(db_path: str) -> float:
+    try:
+        return os.path.getmtime(db_path)
+    except OSError:
+        return 0.0
+
 
 st.set_page_config(
     page_title="Groww Review Pulse",
@@ -89,7 +75,58 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+if not st.session_state.get("_secrets_loaded"):
+    apply_streamlit_secrets()
+    st.session_state["_secrets_loaded"] = True
+
+from frontend.dashboard_ui import (  # noqa: E402
+    PLOTLY_CONFIG,
+    inject_styles,
+    product_map_chart,
+    rating_bars,
+    render_actions,
+    render_deliverables,
+    render_hero,
+    render_kpis,
+    render_quotes,
+    render_reviews_grid,
+    render_section_head,
+    render_sidebar_brand,
+    render_sidebar_sync,
+    render_pipeline_steps,
+    render_themes,
+    render_wow_pulse,
+    sentiment_donut,
+)
+from shared.db_paths import resolve_database_path  # noqa: E402
+from shared.groww_product_map import themes_to_area_counts  # noqa: E402
+from shared.play_store_config import resolve_play_package, validate_finance_package  # noqa: E402
+from shared.week_over_week import compute_week_over_week  # noqa: E402
+
 inject_styles()
+
+db_path = resolve_database_path(config_value("DATABASE_PATH") or None)
+os.environ["DATABASE_PATH"] = db_path
+
+_raw_pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME") or None
+play_pkg = resolve_play_package(_raw_pkg)
+os.environ["GOOGLE_PLAY_PACKAGE_NAME"] = play_pkg
+_pkg_ok, _pkg_info = validate_finance_package(play_pkg)
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def load_dashboard_cached(db_path: str, db_mtime: float) -> dict:
+    """Load dashboard data once per DB revision (avoids duplicate queries on rerun)."""
+    from shared.database import DatabaseManager
+
+    db = DatabaseManager(db_path)
+    try:
+        snap = db.get_dashboard_snapshot()
+        wow = compute_week_over_week(snap["insights"], snap["prior_insights"])
+        snap["wow"] = wow
+        return snap
+    finally:
+        db.close()
 
 
 def doc_url_from_id(doc_id: str | None) -> str | None:
@@ -102,8 +139,17 @@ def doc_url_from_id(doc_id: str | None) -> str | None:
     return f"https://docs.google.com/document/d/{doc_id}/edit"
 
 
-def run_background_pipeline(db_path: str) -> None:
+def run_sync_pipeline(db_path: str, clear_first: bool = False) -> None:
+    from shared.database import DatabaseManager
     from shared.pipeline_runner import run_full_pipeline
+
+    if clear_first:
+        _db = DatabaseManager(db_path)
+        try:
+            _db.clear_all_data()
+        finally:
+            _db.close()
+        load_dashboard_cached.clear()
 
     steps: dict[int, str] = {i: "pending" for i in range(1, 5)}
     pipeline_slot = st.sidebar.empty()
@@ -113,48 +159,21 @@ def run_background_pipeline(db_path: str) -> None:
         with pipeline_slot.container():
             render_pipeline_steps(steps)
 
-    with st.spinner("Updating your dashboard…"):
+    with st.spinner("Syncing reviews and insights…"):
         result = run_full_pipeline(database_path=db_path, on_step=on_step)
 
+    load_dashboard_cached.clear()
     st.session_state["pipeline_result"] = result
-    st.session_state["pipeline_done"] = True
     st.session_state["last_sync"] = datetime.now().strftime("%d %b %Y · %H:%M")
+    st.session_state.pop("force_refresh", None)
 
 
-def load_dashboard(db_path: str) -> dict:
-    from shared.database import DatabaseManager
+def render_empty_state() -> None:
+    st.info(
+        "**Dashboard ready.** Click **Refresh insights** in the sidebar to collect Play Store "
+        "reviews and run analysis. The page loads instantly until you choose to sync."
+    )
 
-    db = DatabaseManager(db_path)
-    try:
-        insights = db.get_insights()
-        prior = None
-        if insights and insights.get("week"):
-            prior = db.get_prior_week_insights(insights["week"])
-        wow = compute_week_over_week(insights, prior)
-        return {
-            "insights": insights,
-            "prior_insights": prior,
-            "wow": wow,
-            "total": db.get_review_count(),
-            "positive": db.get_top_reviews(limit=8, mode="positive"),
-            "negative": db.get_top_reviews(limit=8, mode="negative"),
-            "recent": db.get_top_reviews(limit=8, mode="recent"),
-            "rating_dist": db.get_rating_distribution(),
-        }
-    finally:
-        db.close()
-
-
-from shared.db_paths import resolve_database_path
-from shared.play_store_config import resolve_play_package, validate_finance_package
-
-db_path = resolve_database_path(config_value("DATABASE_PATH") or None)
-os.environ["DATABASE_PATH"] = db_path
-
-_raw_pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME") or None
-play_pkg = resolve_play_package(_raw_pkg)
-os.environ["GOOGLE_PLAY_PACKAGE_NAME"] = play_pkg
-_pkg_ok, _pkg_info = validate_finance_package(play_pkg)
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -165,38 +184,25 @@ with st.sidebar:
             "Update Streamlit Secrets, then **Refresh insights**."
         )
     st.caption(f"Source app: {_pkg_info}" if _pkg_ok else f"⚠ {_pkg_info}")
-    st.caption("Tap refresh to wipe old data and re-fetch finance reviews.")
+    st.caption("Refresh runs the full pipeline (collect → analyze → doc → email).")
     if st.button("Refresh insights", type="primary", use_container_width=True):
-        st.session_state["pipeline_done"] = False
         st.session_state["force_refresh"] = True
         st.rerun()
     render_sidebar_sync(st.session_state.get("last_sync"))
     if not _analysis_configured():
         st.warning("Dashboard sync is unavailable. Check app configuration.")
 
-data = load_dashboard(db_path)
-needs_pipeline = (
-    data["insights"] is None
-    or data["total"] == 0
-    or st.session_state.get("force_refresh")
-)
-if needs_pipeline and _analysis_configured() and not st.session_state.get("pipeline_done"):
-    if st.session_state.get("force_refresh"):
-        from shared.database import DatabaseManager
-
-        _db = DatabaseManager(db_path)
-        try:
-            _db.clear_all_data()
-        finally:
-            _db.close()
+# Sync only when user explicitly requests refresh (not on every empty DB / cold start)
+if st.session_state.get("force_refresh") and _analysis_configured():
     if not _pkg_ok:
         st.error(f"Cannot sync: {_pkg_info}")
         st.stop()
-    run_background_pipeline(db_path)
-    st.session_state.pop("force_refresh", None)
+    run_sync_pipeline(db_path, clear_first=True)
     st.rerun()
 
-data = load_dashboard(db_path)
+data = load_dashboard_cached(db_path, _db_mtime(db_path))
+has_data = data["total"] > 0 and data.get("insights")
+
 insights = data["insights"] or {}
 sentiment = insights.get("sentiment_summary") or {}
 pos = sentiment.get("positive", 0)
@@ -212,6 +218,11 @@ play_url = f"https://play.google.com/store/apps/details?id={play_pkg}"
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 render_hero(week, data["total"], analysed, pos_pct)
+
+if not has_data:
+    render_empty_state()
+    st.stop()
+
 if data.get("wow"):
     render_wow_pulse(data["wow"])
 render_kpis(data["total"], analysed, pos, neg, neu)
@@ -221,7 +232,11 @@ chart_left, chart_mid, chart_right = st.columns([1.05, 1.05, 1], gap="large")
 with chart_left:
     st.markdown('<div class="panel"><div class="panel-title"><span>●</span> Sentiment</div>', unsafe_allow_html=True)
     if pos + neg + neu > 0:
-        st.plotly_chart(sentiment_donut(pos, neg, neu), use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(
+            sentiment_donut(pos, neg, neu),
+            use_container_width=True,
+            config=PLOTLY_CONFIG,
+        )
     else:
         st.caption("Awaiting next sync.")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -229,7 +244,11 @@ with chart_left:
 with chart_mid:
     st.markdown('<div class="panel"><div class="panel-title"><span>●</span> Ratings</div>', unsafe_allow_html=True)
     if sum(data["rating_dist"].values()):
-        st.plotly_chart(rating_bars(data["rating_dist"]), use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(
+            rating_bars(data["rating_dist"]),
+            use_container_width=True,
+            config=PLOTLY_CONFIG,
+        )
     else:
         st.caption("Awaiting next sync.")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -255,7 +274,7 @@ with map_col:
         st.plotly_chart(
             product_map_chart(area_counts),
             use_container_width=True,
-            config={"displayModeBar": False},
+            config=PLOTLY_CONFIG,
         )
     else:
         st.caption("Product map fills in after analysis.")
@@ -267,7 +286,9 @@ with map_side:
         p_sent = prior.get("sentiment_summary") or {}
         p_total = sum(p_sent.get(k, 0) for k in ("positive", "negative", "neutral")) or 1
         p_pos = int(round(100 * p_sent.get("positive", 0) / p_total))
-        st.caption(f"**{prior.get('week', '—')}** · {prior.get('total_reviews_analysed', 0)} reviews · {p_pos}% positive")
+        st.caption(
+            f"**{prior.get('week', '—')}** · {prior.get('total_reviews_analysed', 0)} reviews · {p_pos}% positive"
+        )
         render_themes(prior.get("themes") or [])
     else:
         st.caption("Save insights for two different weeks to compare trends.")

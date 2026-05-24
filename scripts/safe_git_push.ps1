@@ -12,6 +12,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $py "$Root\scripts\secret_scan.py" tracked
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+& $py "$Root\scripts\guard_repo_secrets.py"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Write-Host "Scan OK. Pushing to origin..."
 git push origin HEAD
 exit $LASTEXITCODE

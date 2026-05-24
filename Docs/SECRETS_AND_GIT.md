@@ -38,6 +38,26 @@ If you ever committed a real `.env` once (even if deleted later), treat keys as 
 
 ---
 
+## Root cause we fixed (May 2026)
+
+Running the app **used to write** `GOOGLE_CREDENTIALS_JSON` into  
+`MCPServer/saksham-mcp-server/credentials.json` inside the repo. That made git show
+secret files as modified and led to accidental pushes.
+
+**Now:** `shared/google_auth.py` reads secrets from **environment only** — never writes
+OAuth files into the repository.
+
+If secrets were ever pushed, run:
+
+```powershell
+python scripts/untrack_secrets.py
+git commit -m "Stop tracking secret files"
+```
+
+Then **rotate** Groq + Google OAuth keys.
+
+---
+
 ## Permanent protection (install once per clone)
 
 ```powershell

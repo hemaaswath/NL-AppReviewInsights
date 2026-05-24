@@ -3,7 +3,7 @@ Database schema and connection management for the App Review Insights Analyzer.
 """
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, Boolean, Text, JSON
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, Boolean, Text, JSON, func
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from contextlib import contextmanager
 import os
@@ -259,16 +259,63 @@ class DatabaseManager:
             return [review.to_dict() for review in query.all()]
 
     def get_rating_distribution(self, source: Optional[str] = None) -> dict[int, int]:
-        """Count reviews per star rating (1–5)."""
+        """Count reviews per star rating (1–5) via SQL aggregation."""
         dist = {i: 0 for i in range(1, 6)}
         with self.get_session() as session:
-            query = session.query(ReviewModel)
+            query = session.query(ReviewModel.rating, func.count(ReviewModel.id))
             if source:
-                query = query.filter_by(source=source)
-            for row in query.all():
-                if 1 <= row.rating <= 5:
-                    dist[row.rating] += 1
+                query = query.filter(ReviewModel.source == source)
+            for rating, count in query.group_by(ReviewModel.rating).all():
+                if rating is not None and 1 <= int(rating) <= 5:
+                    dist[int(rating)] = int(count)
         return dist
+
+    def get_dashboard_snapshot(self) -> dict:
+        """Single-session fetch for Streamlit dashboard (fewer round-trips)."""
+        with self.get_session() as session:
+            total = session.query(ReviewModel).count()
+
+            ins_row = (
+                session.query(InsightsModel)
+                .order_by(InsightsModel.generated_at.desc())
+                .first()
+            )
+            insights = ins_row.to_dict() if ins_row else None
+
+            prior = None
+            if insights and insights.get("week"):
+                from shared.week_over_week import previous_week_id
+
+                prior_row = session.query(InsightsModel).filter_by(
+                    week=previous_week_id(insights["week"])
+                ).first()
+                prior = prior_row.to_dict() if prior_row else None
+
+            dist = {i: 0 for i in range(1, 6)}
+            for rating, count in session.query(
+                ReviewModel.rating, func.count(ReviewModel.id)
+            ).group_by(ReviewModel.rating).all():
+                if rating is not None and 1 <= int(rating) <= 5:
+                    dist[int(rating)] = int(count)
+
+            def top(mode: str, limit: int = 8) -> list[dict]:
+                q = session.query(ReviewModel)
+                if mode == "positive":
+                    q = q.filter(ReviewModel.rating >= 4)
+                elif mode == "negative":
+                    q = q.filter(ReviewModel.rating <= 2)
+                q = q.order_by(ReviewModel.date.desc()).limit(limit)
+                return [r.to_dict() for r in q.all()]
+
+            return {
+                "insights": insights,
+                "prior_insights": prior,
+                "total": total,
+                "positive": top("positive"),
+                "negative": top("negative"),
+                "recent": top("recent"),
+                "rating_dist": dist,
+            }
 
     def clear_all_data(self) -> None:
         """Remove all reviews and insights (e.g. after wrong app package was collected)."""

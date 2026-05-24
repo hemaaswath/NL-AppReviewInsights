@@ -3,16 +3,19 @@
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT" || exit 1
 
-if command -v python >/dev/null 2>&1; then
-  python "$ROOT/scripts/secret_scan.py" push || exit 1
-elif command -v py >/dev/null 2>&1; then
-  py "$ROOT/scripts/secret_scan.py" push || exit 1
-else
-  echo "pre-push: install Python to run secret_scan.py"
-  exit 1
-fi
+_run() {
+  if command -v python >/dev/null 2>&1; then
+    python "$ROOT/scripts/$1"
+  elif command -v py >/dev/null 2>&1; then
+    py "$ROOT/scripts/$1"
+  else
+    echo "pre-push: install Python"
+    exit 1
+  fi
+}
 
-# Also scan all tracked files (catches secrets already committed locally)
-python "$ROOT/scripts/secret_scan.py" tracked 2>/dev/null || py "$ROOT/scripts/secret_scan.py" tracked || exit 1
+_run secret_scan.py push || exit 1
+_run secret_scan.py tracked || exit 1
+_run guard_repo_secrets.py || exit 1
 
 exit 0

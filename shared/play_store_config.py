@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 
 # Wrong ID — gardening app "Groww - Plant Care"
 PLANT_APP_PACKAGE = "com.groww"
@@ -29,7 +30,13 @@ def play_app_metadata(package: str) -> dict:
 def validate_finance_package(package: str) -> tuple[bool, str]:
     """
     Return (ok, message). Fails if package is the known plant app or non-Finance genre.
+    Cached per process to avoid Play Store HTTP on every Streamlit rerun.
     """
+    return _validate_finance_package_cached(package)
+
+
+@lru_cache(maxsize=4)
+def _validate_finance_package_cached(package: str) -> tuple[bool, str]:
     if package == PLANT_APP_PACKAGE:
         return False, (
             f"{PLANT_APP_PACKAGE} is the plant-care app, not Groww Stocks. "

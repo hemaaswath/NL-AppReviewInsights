@@ -3,13 +3,17 @@ from __future__ import annotations
 
 import html
 
-import plotly.graph_objects as go
 import streamlit as st
+
+# Lightweight Plotly config — skip toolbar, faster rerenders
+PLOTLY_CONFIG = {
+    "displayModeBar": False,
+    "staticPlot": False,
+    "responsive": True,
+}
 
 DASHBOARD_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
 :root {
   --groww: #00b386;
   --groww-2: #34d399;
@@ -29,7 +33,7 @@ DASHBOARD_CSS = """
 }
 
 html, body, [class*="css"] {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif !important;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
   color: var(--ink);
 }
 
@@ -292,7 +296,10 @@ div[data-testid="stAlert"] { border-radius: 12px; }
 
 
 def inject_styles() -> None:
+    if st.session_state.get("_dashboard_css_injected"):
+        return
     st.markdown(DASHBOARD_CSS, unsafe_allow_html=True)
+    st.session_state["_dashboard_css_injected"] = True
 
 
 def render_sidebar_brand() -> None:
@@ -381,7 +388,9 @@ def render_kpis(total: int, analysed: int, pos: int, neg: int, neu: int) -> None
     st.markdown(f'<div class="kpi-grid">{inner}</div>', unsafe_allow_html=True)
 
 
-def sentiment_donut(pos: int, neg: int, neu: int) -> go.Figure:
+def sentiment_donut(pos: int, neg: int, neu: int):
+    import plotly.graph_objects as go
+
     fig = go.Figure(
         data=[
             go.Pie(
@@ -393,7 +402,7 @@ def sentiment_donut(pos: int, neg: int, neu: int) -> go.Figure:
                     line=dict(color="#fff", width=3),
                 ),
                 textinfo="percent",
-                textfont=dict(size=13, family="Plus Jakarta Sans", color="#0f172a"),
+                textfont=dict(size=13, family="system-ui, sans-serif", color="#0f172a"),
                 hovertemplate="%{label}: %{value}<extra></extra>",
             )
         ]
@@ -411,12 +420,14 @@ def sentiment_donut(pos: int, neg: int, neu: int) -> go.Figure:
         legend=dict(orientation="h", y=-0.12, x=0.5, xanchor="center"),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Plus Jakarta Sans", color="#64748b"),
+        font=dict(family="system-ui, sans-serif", color="#64748b"),
     )
     return fig
 
 
-def rating_bars(dist: dict[int, int]) -> go.Figure:
+def rating_bars(dist: dict[int, int]):
+    import plotly.graph_objects as go
+
     stars = list(range(5, 0, -1))
     counts = [dist.get(s, 0) for s in stars]
     fig = go.Figure(
@@ -427,7 +438,7 @@ def rating_bars(dist: dict[int, int]) -> go.Figure:
             marker=dict(color=["#00b386", "#34d399", "#6ee7b7", "#fcd34d", "#ef4444"][::-1]),
             text=counts,
             textposition="outside",
-            textfont=dict(family="Plus Jakarta Sans", size=11),
+            textfont=dict(family="system-ui, sans-serif", size=11),
         )
     )
     fig.update_layout(
@@ -437,7 +448,7 @@ def rating_bars(dist: dict[int, int]) -> go.Figure:
         yaxis=dict(title=""),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Plus Jakarta Sans", size=11, color="#64748b"),
+        font=dict(family="system-ui, sans-serif", size=11, color="#64748b"),
     )
     return fig
 
@@ -466,8 +477,9 @@ def render_wow_pulse(wow: dict) -> None:
     )
 
 
-def product_map_chart(area_counts: dict[str, int]) -> go.Figure:
+def product_map_chart(area_counts: dict[str, int]):
     """Horizontal bar chart of all Groww product areas."""
+    import plotly.graph_objects as go
     from shared.groww_product_map import GROWW_PRODUCT_AREAS
 
     areas = list(GROWW_PRODUCT_AREAS)
@@ -481,7 +493,7 @@ def product_map_chart(area_counts: dict[str, int]) -> go.Figure:
             marker=dict(color=colors),
             text=counts,
             textposition="outside",
-            textfont=dict(size=10, family="Plus Jakarta Sans"),
+            textfont=dict(size=10, family="system-ui, sans-serif"),
         )
     )
     fig.update_layout(
@@ -491,7 +503,7 @@ def product_map_chart(area_counts: dict[str, int]) -> go.Figure:
         yaxis=dict(autorange="reversed"),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Plus Jakarta Sans", size=10, color="#64748b"),
+        font=dict(family="system-ui, sans-serif", size=10, color="#64748b"),
     )
     return fig
 

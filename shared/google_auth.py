@@ -1,9 +1,8 @@
 """
 Google OAuth credentials for Phases 3–4 (direct API, no MCP HTTP).
 
-Uses GOOGLE_TOKEN_JSON / GOOGLE_CREDENTIALS_JSON from the environment
-(Streamlit secrets, Railway, or local .env). Falls back to
-MCPServer/saksham-mcp-server/token.json when present.
+Secrets are read from environment variables ONLY — never written into the repo
+(MCPServer/saksham-mcp-server/credentials.json or token.json).
 """
 from __future__ import annotations
 
@@ -34,60 +33,68 @@ def _is_deployed() -> bool:
     )
 
 
-def _write_credentials_from_env() -> None:
-    raw = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+def _parse_env_json(key: str) -> dict | None:
+    raw = os.environ.get(key)
     if not raw:
-        return
-    overwrite = os.getenv("GOOGLE_CREDENTIALS_JSON_OVERWRITE", "").lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-    if overwrite or not CREDENTIALS_PATH.is_file():
-        MCP_DIR.mkdir(parents=True, exist_ok=True)
-        CREDENTIALS_PATH.write_text(raw, encoding="utf-8")
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{key} is not valid JSON") from exc
+
+
+def _credentials_project_id_from_env() -> str:
+    data = _parse_env_json("GOOGLE_CREDENTIALS_JSON")
+    if not data:
+        return ""
+    block = data.get("installed", data.get("web", {}))
+    return block.get("project_id", "") or ""
+
+
+def _credentials_project_id_from_file(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        meta = json.loads(path.read_text(encoding="utf-8"))
+        block = meta.get("installed", meta.get("web", {}))
+        return block.get("project_id", "") or ""
+    except (json.JSONDecodeError, OSError):
+        return "invalid_json"
 
 
 def get_google_credentials() -> Credentials:
     """Load and refresh Google credentials (non-interactive on cloud)."""
-    _write_credentials_from_env()
-
     creds: Credentials | None = None
-    env_token = os.environ.get("GOOGLE_TOKEN_JSON")
+    env_token = _parse_env_json("GOOGLE_TOKEN_JSON")
     if env_token:
-        creds = Credentials.from_authorized_user_info(json.loads(env_token), SCOPES)
+        creds = Credentials.from_authorized_user_info(env_token, SCOPES)
     elif TOKEN_PATH.is_file():
         creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            # Do NOT write refreshed token to disk — keeps secrets out of the repo.
         elif _is_deployed():
             raise RuntimeError(
                 "Google token missing or invalid. Set GOOGLE_TOKEN_JSON in Streamlit "
-                "secrets (run scripts/export_streamlit_secrets.ps1 locally first)."
+                "Secrets only (not in GitHub). Re-export locally with "
+                "scripts/export_streamlit_secrets.ps1 if needed."
             )
         else:
             raise RuntimeError(
-                f"Google OAuth not configured. Run scripts/complete_oauth.ps1 or set "
-                f"GOOGLE_TOKEN_JSON. Expected token at {TOKEN_PATH}"
+                "Google OAuth not configured. Run scripts/complete_oauth.ps1 locally "
+                f"(creates gitignored {TOKEN_PATH.name}) or set GOOGLE_TOKEN_JSON in .env."
             )
 
     return creds
 
 
 def credentials_status() -> dict:
-    """Lightweight check for UI / health (no API calls)."""
-    _write_credentials_from_env()
-    project_id = ""
-    if CREDENTIALS_PATH.is_file():
-        try:
-            meta = json.loads(CREDENTIALS_PATH.read_text(encoding="utf-8"))
-            block = meta.get("installed", meta.get("web", {}))
-            project_id = block.get("project_id", "")
-        except json.JSONDecodeError:
-            project_id = "invalid_json"
-
+    """Lightweight check for UI / health (no API calls, no disk writes)."""
+    project_id = _credentials_project_id_from_env() or _credentials_project_id_from_file(
+        CREDENTIALS_PATH
+    )
     return {
         "token_present": bool(os.environ.get("GOOGLE_TOKEN_JSON")) or TOKEN_PATH.is_file(),
         "credentials_present": bool(os.environ.get("GOOGLE_CREDENTIALS_JSON"))
