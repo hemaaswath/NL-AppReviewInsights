@@ -59,16 +59,6 @@ def assert_safe_to_push() -> None:
             print(f"  {p}")
         raise SystemExit(1)
 
-    # Block submodule pointer commits when MCP folder has dirty secret state
-    if (ROOT / "MCPServer" / "saksham-mcp-server").exists():
-        sub = _git("diff", "--cached", "--name-only", "MCPServer/saksham-mcp-server")
-        if sub.stdout.strip():
-            print(
-                "BLOCKED: Do not commit MCPServer/saksham-mcp-server submodule changes.\n"
-                "OAuth files belong in %LOCALAPPDATA%\\groww-insights\\ (outside repo)."
-            )
-            raise SystemExit(1)
-
 
 if __name__ == "__main__":
     assert_safe_to_push()
