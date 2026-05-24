@@ -291,15 +291,63 @@ section[data-testid="stSidebar"] .stButton button {
 div[data-testid="stPlotlyChart"] { border-radius: 14px; overflow: hidden; }
 
 div[data-testid="stAlert"] { border-radius: 12px; }
+
+/* Keep layout stable during Streamlit reruns / refresh */
+.sync-banner {
+  background: linear-gradient(135deg, #ecfdf5 0%, #fff 100%);
+  border: 1px solid #a7f3d0; border-radius: 14px;
+  padding: 0.75rem 1.1rem; margin-bottom: 1.25rem;
+  font-size: 0.88rem; font-weight: 600; color: #065f46;
+  display: flex; align-items: center; gap: 0.65rem;
+  box-shadow: 0 4px 16px rgba(0, 179, 134, 0.12);
+}
+.sync-banner .pulse {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--groww); animation: pulse-dot 1.2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.sync-banner.done {
+  background: #f8fafc; border-color: var(--border); color: var(--ink-muted);
+}
+.sync-banner.done .pulse { display: none; }
+.sidebar-sync-msg {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(110, 231, 183, 0.35);
+  border-radius: 10px; padding: 0.65rem 0.85rem; margin: 0.65rem 0;
+  font-size: 0.78rem; color: #a7f3d0 !important; line-height: 1.45;
+}
+.sidebar-pipeline-wrap {
+  margin-top: 0.75rem; padding-top: 0.75rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+section[data-testid="stSidebar"] [data-testid="stSpinner"] {
+  margin-top: 0.5rem;
+}
+section[data-testid="stSidebar"] [data-testid="stSpinner"] p {
+  color: #94a3b8 !important; font-size: 0.78rem !important;
+}
+/* Hide default main-area spinner text flash during refresh */
+div[data-testid="stMainBlockContainer"] > div > div > [data-testid="stSpinner"] {
+  border-radius: 12px; padding: 0.5rem;
+}
 </style>
 """
 
 
 def inject_styles() -> None:
-    if st.session_state.get("_dashboard_css_injected"):
-        return
+    """Inject on every run so CSS survives Streamlit reruns after refresh."""
     st.markdown(DASHBOARD_CSS, unsafe_allow_html=True)
-    st.session_state["_dashboard_css_injected"] = True
+
+
+def render_sync_banner(message: str, *, active: bool = True) -> None:
+    cls = "sync-banner" if active else "sync-banner done"
+    pulse = '<span class="pulse"></span>' if active else ""
+    st.markdown(
+        f'<div class="{cls}">{pulse}<span>{html.escape(message)}</span></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_sidebar_brand() -> None:
@@ -316,7 +364,10 @@ def render_sidebar_brand() -> None:
 
 def render_sidebar_sync(last_sync: str | None, message: str | None = None) -> None:
     if message:
-        st.caption(message)
+        st.markdown(
+            f'<div class="sidebar-sync-msg">{html.escape(message)}</div>',
+            unsafe_allow_html=True,
+        )
     if last_sync:
         st.markdown(
             f'<div class="sync-time"><strong>Last updated</strong>{html.escape(last_sync)}</div>',
@@ -332,7 +383,10 @@ def render_pipeline_steps(steps: dict[int, str]) -> None:
         cls = {"done": "done", "running": "run"}.get(state, "")
         mark = {"done": "●", "running": "◐", "error": "✕", "skipped": "○"}.get(state, "○")
         rows.append(f'<div class="pipeline-step {cls}">{mark} {labels[n]}</div>')
-    st.markdown("".join(rows), unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="sidebar-pipeline-wrap">{"".join(rows)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_hero(week: str, total: int, analysed: int, pos_pct: int) -> None:

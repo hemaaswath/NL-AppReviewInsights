@@ -113,6 +113,7 @@ from frontend.dashboard_ui import (  # noqa: E402
     render_sidebar_brand,
     render_sidebar_sync,
     render_pipeline_steps,
+    render_sync_banner,
     render_themes,
     render_wow_pulse,
     sentiment_donut,
@@ -168,20 +169,25 @@ def doc_url_from_id(doc_id: str | None) -> str | None:
     return f"https://docs.google.com/document/d/{doc_id}/edit"
 
 
-def _pipeline_callbacks():
+def _pipeline_callbacks(sidebar_slot) -> object:
+    """Update pipeline steps in a fixed sidebar slot (does not wipe the whole sidebar)."""
     steps: dict[int, str] = {i: "pending" for i in range(1, 5)}
-    slot = st.sidebar.empty()
 
     def on_step(phase: int, _label: str, state: str) -> None:
         steps[phase] = state
-        with slot.container():
+        with sidebar_slot.container():
             render_pipeline_steps(steps)
 
     return on_step
 
 
 def run_sync_pipeline(
-    db_path: str, *, clear_first: bool, phase: str, collect_fast: bool = False
+    db_path: str,
+    *,
+    clear_first: bool,
+    phase: str,
+    collect_fast: bool = False,
+    on_step=None,
 ) -> dict:
     from shared.database import DatabaseManager
     from shared.pipeline_runner import run_dashboard_pipeline, run_publish_phases
@@ -194,19 +200,15 @@ def run_sync_pipeline(
             _db.close()
         load_dashboard_cached.clear()
 
-    on_step = _pipeline_callbacks()
     if phase == "data":
-        label = "Checking for new reviews…" if collect_fast else "Fetching live Play Store reviews…"
-        with st.spinner(label):
-            result = run_dashboard_pipeline(
-                database_path=db_path,
-                on_step=on_step,
-                include_publish=False,
-                collect_fast=collect_fast,
-            )
+        result = run_dashboard_pipeline(
+            database_path=db_path,
+            on_step=on_step,
+            include_publish=False,
+            collect_fast=collect_fast,
+        )
     else:
-        with st.spinner("Publishing report & email draft…"):
-            result = run_publish_phases(database_path=db_path, on_step=on_step)
+        result = run_publish_phases(database_path=db_path, on_step=on_step)
 
     load_dashboard_cached.clear()
     st.session_state["pipeline_result"] = result
@@ -228,7 +230,10 @@ def render_dashboard(data: dict, *, data_source: str, play_url: str) -> None:
     email_id = insights.get("email_id")
 
     if data_source == "seed":
-        st.caption("📊 Showing bundled snapshot — live sync runs automatically in the background.")
+        render_sync_banner(
+            "Showing bundled snapshot — click Refresh insights for live Play Store data.",
+            active=False,
+        )
 
     render_hero(week, data["total"], analysed, pos_pct)
     if data.get("wow"):
@@ -336,32 +341,6 @@ def render_dashboard(data: dict, *, data_source: str, play_url: str) -> None:
 
 play_url = f"https://play.google.com/store/apps/details?id={play_pkg}"
 
-# Manual refresh — incremental collect; skip Groq when nothing new (before sidebar)
-if st.session_state.get("force_refresh") and _analysis_configured():
-    if not _pkg_ok:
-        st.error(f"Cannot sync: {_pkg_info}")
-        st.stop()
-    pre_snap = load_dashboard_cached(db_path, _db_mtime(db_path))
-    result = run_sync_pipeline(
-        db_path,
-        clear_first=False,
-        phase="data",
-        collect_fast=has_live_data(pre_snap),
-    )
-    st.session_state["force_refresh"] = False
-    if result.get("data_changed"):
-        st.session_state.pop("sync_message", None)
-        if _next_sync_phase("data"):
-            st.session_state["sync_phase"] = "publish"
-        st.rerun()
-    else:
-        new_n = int(result.get("new_reviews", 0))
-        st.session_state["sync_message"] = (
-            f"Already up to date — {new_n} new review(s) since last check."
-        )
-        st.session_state["sync_phase"] = None
-
-
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     render_sidebar_brand()
@@ -387,14 +366,21 @@ with st.sidebar:
             st.info("Streamlit Secrets → add: " + ", ".join(missing))
     else:
         st.caption("Dashboard loads instantly; live sync runs automatically when needed.")
-    if st.button("Refresh insights", type="primary", use_container_width=True):
-        st.session_state["force_refresh"] = True
+    _syncing = st.session_state.get("sync_in_progress", False)
+    if st.button(
+        "Refresh insights",
+        type="primary",
+        use_container_width=True,
+        disabled=_syncing,
+    ):
+        st.session_state["refresh_requested"] = True
         st.session_state.pop("sync_message", None)
         st.rerun()
     render_sidebar_sync(
         st.session_state.get("last_sync"),
         st.session_state.get("sync_message"),
     )
+    pipeline_slot = st.empty()
     if not _analysis_configured():
         st.warning("Live sync unavailable. Bundled snapshot still displays.")
 
@@ -411,11 +397,53 @@ else:
     ):
         st.session_state["sync_phase"] = "data"
 
+inject_styles()
 render_dashboard(data, data_source=data_source, play_url=play_url)
+
+# Refresh runs after the dashboard is painted so layout/CSS stay intact
+if st.session_state.pop("refresh_requested", False) and _analysis_configured():
+    if not _pkg_ok:
+        st.error(f"Cannot sync: {_pkg_info}")
+    else:
+        st.session_state["sync_in_progress"] = True
+        inject_styles()
+        with pipeline_slot.container():
+            render_pipeline_steps({i: "pending" for i in range(1, 5)})
+        on_step = _pipeline_callbacks(pipeline_slot)
+        try:
+            pre_snap = load_dashboard_cached(db_path, _db_mtime(db_path))
+            result = run_sync_pipeline(
+                db_path,
+                clear_first=False,
+                phase="data",
+                collect_fast=has_live_data(pre_snap),
+                on_step=on_step,
+            )
+            if result.get("data_changed"):
+                st.session_state.pop("sync_message", None)
+                if _next_sync_phase("data"):
+                    st.session_state["sync_phase"] = "publish"
+                st.rerun()
+            else:
+                new_n = int(result.get("new_reviews", 0))
+                st.session_state["sync_message"] = (
+                    f"Already up to date — {new_n} new review(s) since last check."
+                )
+                st.session_state["sync_phase"] = None
+                st.toast("Already up to date — no new reviews", icon="✅")
+        except Exception as exc:
+            st.session_state["sync_message"] = f"Sync failed: {exc}"
+            st.toast(f"Sync failed: {exc}", icon="⚠️")
+        finally:
+            st.session_state["sync_in_progress"] = False
 
 # Background sync after UI is rendered (local dev only; cloud uses Refresh button)
 sync_phase = st.session_state.get("sync_phase")
-if sync_phase and _analysis_configured() and _pkg_ok:
+if sync_phase and _analysis_configured() and _pkg_ok and not st.session_state.get(
+    "sync_in_progress"
+):
+    inject_styles()
+    on_step = _pipeline_callbacks(pipeline_slot)
     try:
         if sync_phase == "data":
             pre_snap = load_dashboard_cached(db_path, _db_mtime(db_path))
@@ -424,6 +452,7 @@ if sync_phase and _analysis_configured() and _pkg_ok:
                 clear_first=False,
                 phase="data",
                 collect_fast=has_live_data(pre_snap),
+                on_step=on_step,
             )
             if result.get("data_changed") and _next_sync_phase("data"):
                 st.session_state["sync_phase"] = "publish"
@@ -432,7 +461,12 @@ if sync_phase and _analysis_configured() and _pkg_ok:
             if result.get("data_changed"):
                 st.rerun()
         elif sync_phase == "publish":
-            run_sync_pipeline(db_path, clear_first=False, phase="publish")
+            run_sync_pipeline(
+                db_path,
+                clear_first=False,
+                phase="publish",
+                on_step=on_step,
+            )
             st.session_state["sync_phase"] = None
             st.rerun()
     except Exception as exc:
