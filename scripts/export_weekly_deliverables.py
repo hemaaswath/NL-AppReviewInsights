@@ -111,6 +111,16 @@ def main() -> None:
         print(f"Wrote {DELIV / md_name}")
         print(f"Wrote {DELIV / html_name}  (open → Print → PDF)")
         print(f"Wrote {DELIV / csv_name}")
+
+        # Refresh bundled Streamlit seed (no secrets — reviews truncated in seed)
+        seed_path = ROOT / "data" / "dashboard_seed.json"
+        snap = db.get_dashboard_snapshot()
+        from shared.week_over_week import compute_week_over_week
+
+        snap["wow"] = compute_week_over_week(snap["insights"], snap.get("prior_insights"))
+        seed_path.parent.mkdir(parents=True, exist_ok=True)
+        seed_path.write_text(json.dumps(snap, indent=2, default=str), encoding="utf-8")
+        print(f"Wrote {seed_path}")
     finally:
         db.close()
 

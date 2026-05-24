@@ -1,5 +1,7 @@
 """
 Groww App Review Insights — executive dashboard (Streamlit Cloud).
+
+Instant load: bundled seed snapshot renders immediately; live sync runs after.
 """
 from __future__ import annotations
 
@@ -22,8 +24,6 @@ import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv(ROOT / ".env", override=False)
-
-# Never persist Streamlit / .env secrets into repo files (see shared/google_auth.py)
 os.environ.setdefault("GOOGLE_CREDENTIALS_JSON_OVERWRITE", "0")
 
 SECRET_KEYS = (
@@ -98,10 +98,10 @@ from frontend.dashboard_ui import (  # noqa: E402
     render_wow_pulse,
     sentiment_donut,
 )
+from shared.dashboard_data import has_live_data  # noqa: E402
 from shared.db_paths import resolve_database_path  # noqa: E402
 from shared.groww_product_map import themes_to_area_counts  # noqa: E402
 from shared.play_store_config import resolve_play_package, validate_finance_package  # noqa: E402
-from shared.week_over_week import compute_week_over_week  # noqa: E402
 
 inject_styles()
 
@@ -111,22 +111,32 @@ os.environ["DATABASE_PATH"] = db_path
 _raw_pkg = config_value("GOOGLE_PLAY_PACKAGE_NAME") or None
 play_pkg = resolve_play_package(_raw_pkg)
 os.environ["GOOGLE_PLAY_PACKAGE_NAME"] = play_pkg
-_pkg_ok, _pkg_info = validate_finance_package(play_pkg)
+
+if "_pkg_ok" not in st.session_state:
+    st.session_state._pkg_ok, st.session_state._pkg_info = validate_finance_package(play_pkg)
+_pkg_ok = st.session_state._pkg_ok
+_pkg_info = st.session_state._pkg_info
 
 
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def load_dashboard_cached(db_path: str, db_mtime: float) -> dict:
-    """Load dashboard data once per DB revision (avoids duplicate queries on rerun)."""
     from shared.database import DatabaseManager
+    from shared.week_over_week import compute_week_over_week
 
     db = DatabaseManager(db_path)
     try:
         snap = db.get_dashboard_snapshot()
-        wow = compute_week_over_week(snap["insights"], snap["prior_insights"])
-        snap["wow"] = wow
+        snap["wow"] = compute_week_over_week(snap["insights"], snap["prior_insights"])
         return snap
     finally:
         db.close()
+
+
+@st.cache_data(show_spinner=False)
+def load_seed_cached() -> dict:
+    from shared.dashboard_data import load_seed_snapshot
+
+    return load_seed_snapshot()
 
 
 def doc_url_from_id(doc_id: str | None) -> str | None:
@@ -139,9 +149,21 @@ def doc_url_from_id(doc_id: str | None) -> str | None:
     return f"https://docs.google.com/document/d/{doc_id}/edit"
 
 
-def run_sync_pipeline(db_path: str, clear_first: bool = False) -> None:
+def _pipeline_callbacks():
+    steps: dict[int, str] = {i: "pending" for i in range(1, 5)}
+    slot = st.sidebar.empty()
+
+    def on_step(phase: int, _label: str, state: str) -> None:
+        steps[phase] = state
+        with slot.container():
+            render_pipeline_steps(steps)
+
+    return on_step
+
+
+def run_sync_pipeline(db_path: str, *, clear_first: bool, phase: str) -> None:
     from shared.database import DatabaseManager
-    from shared.pipeline_runner import run_full_pipeline
+    from shared.pipeline_runner import run_dashboard_pipeline, run_publish_phases
 
     if clear_first:
         _db = DatabaseManager(db_path)
@@ -151,28 +173,139 @@ def run_sync_pipeline(db_path: str, clear_first: bool = False) -> None:
             _db.close()
         load_dashboard_cached.clear()
 
-    steps: dict[int, str] = {i: "pending" for i in range(1, 5)}
-    pipeline_slot = st.sidebar.empty()
-
-    def on_step(phase: int, _label: str, state: str) -> None:
-        steps[phase] = state
-        with pipeline_slot.container():
-            render_pipeline_steps(steps)
-
-    with st.spinner("Syncing reviews and insights…"):
-        result = run_full_pipeline(database_path=db_path, on_step=on_step)
+    on_step = _pipeline_callbacks()
+    if phase == "data":
+        with st.spinner("Fetching live Play Store reviews…"):
+            result = run_dashboard_pipeline(
+                database_path=db_path, on_step=on_step, include_publish=False
+            )
+    else:
+        with st.spinner("Publishing report & email draft…"):
+            result = run_publish_phases(database_path=db_path, on_step=on_step)
 
     load_dashboard_cached.clear()
     st.session_state["pipeline_result"] = result
     st.session_state["last_sync"] = datetime.now().strftime("%d %b %Y · %H:%M")
-    st.session_state.pop("force_refresh", None)
 
 
-def render_empty_state() -> None:
-    st.info(
-        "**Dashboard ready.** Click **Refresh insights** in the sidebar to collect Play Store "
-        "reviews and run analysis. The page loads instantly until you choose to sync."
+def render_dashboard(data: dict, *, data_source: str, play_url: str) -> None:
+    insights = data.get("insights") or {}
+    sentiment = insights.get("sentiment_summary") or {}
+    pos = sentiment.get("positive", 0)
+    neg = sentiment.get("negative", 0)
+    neu = sentiment.get("neutral", 0)
+    analysed = insights.get("total_reviews_analysed", 0) or 0
+    total_sent = pos + neg + neu or 1
+    pos_pct = int(round(100 * pos / total_sent)) if total_sent else 0
+    week = insights.get("week", "—")
+    doc_url = doc_url_from_id(insights.get("doc_id"))
+    email_id = insights.get("email_id")
+
+    if data_source == "seed":
+        st.caption("📊 Showing bundled snapshot — live sync runs automatically in the background.")
+
+    render_hero(week, data["total"], analysed, pos_pct)
+    if data.get("wow"):
+        render_wow_pulse(data["wow"])
+    render_kpis(data["total"], analysed, pos, neg, neu)
+
+    chart_left, chart_mid, chart_right = st.columns([1.05, 1.05, 1], gap="large")
+
+    with chart_left:
+        st.markdown(
+            '<div class="panel"><div class="panel-title"><span>●</span> Sentiment</div>',
+            unsafe_allow_html=True,
+        )
+        if pos + neg + neu > 0:
+            st.plotly_chart(
+                sentiment_donut(pos, neg, neu),
+                use_container_width=True,
+                config=PLOTLY_CONFIG,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with chart_mid:
+        st.markdown(
+            '<div class="panel"><div class="panel-title"><span>●</span> Ratings</div>',
+            unsafe_allow_html=True,
+        )
+        if sum(data["rating_dist"].values()):
+            st.plotly_chart(
+                rating_bars(data["rating_dist"]),
+                use_container_width=True,
+                config=PLOTLY_CONFIG,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with chart_right:
+        st.markdown(
+            '<div class="panel"><div class="panel-title"><span>●</span> Top product areas</div>',
+            unsafe_allow_html=True,
+        )
+        render_themes(insights.get("themes") or [])
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    area_counts = themes_to_area_counts(insights.get("themes") or [])
+    render_section_head("Groww product map")
+    map_col, map_side = st.columns([1.4, 1], gap="large")
+    with map_col:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        if sum(area_counts.values()):
+            st.plotly_chart(
+                product_map_chart(area_counts),
+                use_container_width=True,
+                config=PLOTLY_CONFIG,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+    with map_side:
+        st.markdown(
+            '<div class="panel"><div class="panel-title">Prior week</div>',
+            unsafe_allow_html=True,
+        )
+        prior = data.get("prior_insights")
+        if prior:
+            p_sent = prior.get("sentiment_summary") or {}
+            p_total = sum(p_sent.get(k, 0) for k in ("positive", "negative", "neutral")) or 1
+            p_pos = int(round(100 * p_sent.get("positive", 0) / p_total))
+            st.caption(
+                f"**{prior.get('week', '—')}** · {prior.get('total_reviews_analysed', 0)} reviews · {p_pos}% positive"
+            )
+            render_themes(prior.get("themes") or [])
+        else:
+            st.caption("Save insights for two different weeks to compare trends.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    render_section_head("Voice of the customer")
+    tab_pos, tab_neg, tab_recent, tab_quotes = st.tabs(
+        ["Loved by users", "Needs attention", "Latest", "Highlighted quotes"]
     )
+    with tab_pos:
+        render_reviews_grid(data["positive"])
+    with tab_neg:
+        render_reviews_grid(data["negative"], negative=True)
+    with tab_recent:
+        render_reviews_grid(data["recent"])
+    with tab_quotes:
+        render_quotes(insights.get("quotes") or [])
+
+    render_section_head("Recommended for product")
+    render_actions(insights.get("actions") or [])
+
+    render_deliverables(bool(doc_url), bool(email_id))
+
+    link1, link2, link3 = st.columns(3)
+    with link1:
+        if doc_url:
+            st.link_button("Open weekly report", doc_url, use_container_width=True, type="primary")
+    with link2:
+        if email_id:
+            st.link_button(
+                "Open Gmail drafts",
+                "https://mail.google.com/mail/u/0/#drafts",
+                use_container_width=True,
+            )
+    with link3:
+        st.link_button("View on Play Store", play_url, use_container_width=True)
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -181,144 +314,49 @@ with st.sidebar:
     if _raw_pkg == "com.groww":
         st.warning(
             "Secrets still use `com.groww` (plant app). Fixed to **com.nextbillion.groww** for this run. "
-            "Update Streamlit Secrets, then **Refresh insights**."
+            "Update Streamlit Secrets."
         )
     st.caption(f"Source app: {_pkg_info}" if _pkg_ok else f"⚠ {_pkg_info}")
-    st.caption("Refresh runs the full pipeline (collect → analyze → doc → email).")
+    st.caption("Dashboard loads instantly; live sync runs automatically when needed.")
     if st.button("Refresh insights", type="primary", use_container_width=True):
         st.session_state["force_refresh"] = True
+        st.session_state["sync_phase"] = "data"
         st.rerun()
     render_sidebar_sync(st.session_state.get("last_sync"))
     if not _analysis_configured():
-        st.warning("Dashboard sync is unavailable. Check app configuration.")
+        st.warning("Live sync unavailable. Bundled snapshot still displays.")
 
-# Sync only when user explicitly requests refresh (not on every empty DB / cold start)
+play_url = f"https://play.google.com/store/apps/details?id={play_pkg}"
+
+# Manual full refresh
 if st.session_state.get("force_refresh") and _analysis_configured():
     if not _pkg_ok:
         st.error(f"Cannot sync: {_pkg_info}")
         st.stop()
-    run_sync_pipeline(db_path, clear_first=True)
+    run_sync_pipeline(db_path, clear_first=True, phase="data")
+    st.session_state["force_refresh"] = False
+    st.session_state["sync_phase"] = "publish"
     st.rerun()
 
-data = load_dashboard_cached(db_path, _db_mtime(db_path))
-has_data = data["total"] > 0 and data.get("insights")
+# Bootstrap auto-sync when live DB is empty (Streamlit Cloud cold start)
+live_snap = load_dashboard_cached(db_path, _db_mtime(db_path))
+if has_live_data(live_snap):
+    data, data_source = live_snap, "live"
+else:
+    data, data_source = load_seed_cached(), "seed"
+    if _analysis_configured() and st.session_state.get("sync_phase") is None:
+        st.session_state["sync_phase"] = "data"
 
-insights = data["insights"] or {}
-sentiment = insights.get("sentiment_summary") or {}
-pos = sentiment.get("positive", 0)
-neg = sentiment.get("negative", 0)
-neu = sentiment.get("neutral", 0)
-analysed = insights.get("total_reviews_analysed", 0) or 0
-total_sent = pos + neg + neu or 1
-pos_pct = int(round(100 * pos / total_sent)) if total_sent else 0
-week = insights.get("week", "—")
-doc_url = doc_url_from_id(insights.get("doc_id"))
-email_id = insights.get("email_id")
-play_url = f"https://play.google.com/store/apps/details?id={play_pkg}"
+render_dashboard(data, data_source=data_source, play_url=play_url)
 
-# ── Dashboard ─────────────────────────────────────────────────────────────────
-render_hero(week, data["total"], analysed, pos_pct)
-
-if not has_data:
-    render_empty_state()
-    st.stop()
-
-if data.get("wow"):
-    render_wow_pulse(data["wow"])
-render_kpis(data["total"], analysed, pos, neg, neu)
-
-chart_left, chart_mid, chart_right = st.columns([1.05, 1.05, 1], gap="large")
-
-with chart_left:
-    st.markdown('<div class="panel"><div class="panel-title"><span>●</span> Sentiment</div>', unsafe_allow_html=True)
-    if pos + neg + neu > 0:
-        st.plotly_chart(
-            sentiment_donut(pos, neg, neu),
-            use_container_width=True,
-            config=PLOTLY_CONFIG,
-        )
-    else:
-        st.caption("Awaiting next sync.")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with chart_mid:
-    st.markdown('<div class="panel"><div class="panel-title"><span>●</span> Ratings</div>', unsafe_allow_html=True)
-    if sum(data["rating_dist"].values()):
-        st.plotly_chart(
-            rating_bars(data["rating_dist"]),
-            use_container_width=True,
-            config=PLOTLY_CONFIG,
-        )
-    else:
-        st.caption("Awaiting next sync.")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with chart_right:
-    st.markdown(
-        '<div class="panel"><div class="panel-title"><span>●</span> Top product areas</div>',
-        unsafe_allow_html=True,
-    )
-    render_themes(insights.get("themes") or [])
-    st.markdown("</div>", unsafe_allow_html=True)
-
-area_counts = themes_to_area_counts(insights.get("themes") or [])
-render_section_head("Groww product map")
-st.markdown(
-    '<p class="product-map-hint">Reviews grouped into fintech product areas — comparable week over week.</p>',
-    unsafe_allow_html=True,
-)
-map_col, map_side = st.columns([1.4, 1], gap="large")
-with map_col:
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
-    if sum(area_counts.values()):
-        st.plotly_chart(
-            product_map_chart(area_counts),
-            use_container_width=True,
-            config=PLOTLY_CONFIG,
-        )
-    else:
-        st.caption("Product map fills in after analysis.")
-    st.markdown("</div>", unsafe_allow_html=True)
-with map_side:
-    st.markdown('<div class="panel"><div class="panel-title">Prior week</div>', unsafe_allow_html=True)
-    prior = data.get("prior_insights")
-    if prior:
-        p_sent = prior.get("sentiment_summary") or {}
-        p_total = sum(p_sent.get(k, 0) for k in ("positive", "negative", "neutral")) or 1
-        p_pos = int(round(100 * p_sent.get("positive", 0) / p_total))
-        st.caption(
-            f"**{prior.get('week', '—')}** · {prior.get('total_reviews_analysed', 0)} reviews · {p_pos}% positive"
-        )
-        render_themes(prior.get("themes") or [])
-    else:
-        st.caption("Save insights for two different weeks to compare trends.")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-render_section_head("Voice of the customer")
-tab_pos, tab_neg, tab_recent, tab_quotes = st.tabs(
-    ["Loved by users", "Needs attention", "Latest", "Highlighted quotes"]
-)
-
-with tab_pos:
-    render_reviews_grid(data["positive"])
-with tab_neg:
-    render_reviews_grid(data["negative"], negative=True)
-with tab_recent:
-    render_reviews_grid(data["recent"])
-with tab_quotes:
-    render_quotes(insights.get("quotes") or [])
-
-render_section_head("Recommended for product")
-render_actions(insights.get("actions") or [])
-
-render_deliverables(bool(doc_url), bool(email_id))
-
-link1, link2, link3 = st.columns(3)
-with link1:
-    if doc_url:
-        st.link_button("Open weekly report", doc_url, use_container_width=True, type="primary")
-with link2:
-    if email_id:
-        st.link_button("Open Gmail drafts", "https://mail.google.com/mail/u/0/#drafts", use_container_width=True)
-with link3:
-    st.link_button("View on Play Store", play_url, use_container_width=True)
+# Background sync after UI is rendered (Streamlit streams widgets top-to-bottom)
+sync_phase = st.session_state.get("sync_phase")
+if sync_phase and _analysis_configured() and _pkg_ok:
+    if sync_phase == "data":
+        run_sync_pipeline(db_path, clear_first=False, phase="data")
+        st.session_state["sync_phase"] = "publish"
+        st.rerun()
+    elif sync_phase == "publish":
+        run_sync_pipeline(db_path, clear_first=False, phase="publish")
+        st.session_state["sync_phase"] = None
+        st.rerun()

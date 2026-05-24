@@ -1,0 +1,429 @@
+{
+  "insights": {
+    "id": "2026-W21",
+    "week": "2026-W21",
+    "generated_at": "2026-05-22T11:20:12.554955",
+    "total_reviews_analysed": 124,
+    "themes": [
+      {
+        "name": "Stocks & F&O",
+        "description": "User feedback about stocks & f&o.",
+        "review_count": 55,
+        "sentiment": "negative",
+        "keywords": [
+          "stock",
+          "share",
+          "fno",
+          "f&o",
+          "option"
+        ]
+      },
+      {
+        "name": "Mutual Funds & SIP",
+        "description": "User feedback about mutual funds & sip.",
+        "review_count": 24,
+        "sentiment": "neutral",
+        "keywords": [
+          "mutual",
+          "sip",
+          "nav",
+          "expense ratio",
+          "mf "
+        ]
+      },
+      {
+        "name": "Charts & UX",
+        "description": "User feedback about charts & ux.",
+        "review_count": 17,
+        "sentiment": "neutral",
+        "keywords": [
+          "chart",
+          "candle",
+          "ui",
+          "ux",
+          "lag"
+        ]
+      },
+      {
+        "name": "KYC & Onboarding",
+        "description": "User feedback about kyc & onboarding.",
+        "review_count": 11,
+        "sentiment": "negative",
+        "keywords": [
+          "kyc",
+          "onboard",
+          "signup",
+          "sign up",
+          "pan"
+        ]
+      },
+      {
+        "name": "Payments & UPI",
+        "description": "User feedback about payments & upi.",
+        "review_count": 8,
+        "sentiment": "negative",
+        "keywords": [
+          "upi",
+          "payment",
+          "pay",
+          "add money",
+          "deposit"
+        ]
+      }
+    ],
+    "quotes": [
+      {
+        "text": "Very poor experience with Groww commodity trading. Chart candles lag and don\u2019t match actual market price, leading to wrong entries. I placed trades based on support/candles, but price had already move",
+        "theme_name": "General Feedback",
+        "rating": 1,
+        "sentiment": "negative"
+      },
+      {
+        "text": "this app is scam . i withdraw money from this app and it didn't receive from 5 days .",
+        "theme_name": "General Feedback",
+        "rating": 1,
+        "sentiment": "negative"
+      },
+      {
+        "text": "One of the worst broker. I palced an order today but my app got a glitch where i was not able to see my open order. I had to keep a safe exit because today was expiry and i got panicked because it was",
+        "theme_name": "General Feedback",
+        "rating": 1,
+        "sentiment": "negative"
+      }
+    ],
+    "actions": [
+      {
+        "description": "Investigate and fix reported app crashes on key screens.",
+        "priority": "high",
+        "theme_name": "App Stability",
+        "rationale": "Multiple users report crashes preventing core functionality."
+      },
+      {
+        "description": "Improve customer support response time and resolution quality.",
+        "priority": "medium",
+        "theme_name": "Customer Support",
+        "rationale": "Users frequently mention slow or unhelpful support responses."
+      },
+      {
+        "description": "Simplify the onboarding flow to reduce setup friction.",
+        "priority": "medium",
+        "theme_name": "Onboarding",
+        "rationale": "New users report confusion during initial app setup."
+      }
+    ],
+    "sentiment_summary": {
+      "positive": 34,
+      "negative": 86,
+      "neutral": 4
+    },
+    "doc_id": null,
+    "email_id": null
+  },
+  "prior_insights": null,
+  "total": 124,
+  "positive": [
+    {
+      "id": "4591dbe31b9fee0a62ef5e0af3d72e53",
+      "source": "google_play",
+      "rating": 5,
+      "title": "",
+      "text": "It's great to use and the most important thing is that your videos are very important for understanding the data...",
+      "date": "2026-05-21T13:38:00",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.217432"
+    },
+    {
+      "id": "5c487ee7e3b08ede5a7151129222fc4b",
+      "source": "google_play",
+      "rating": 5,
+      "title": "",
+      "text": "wasy to use and all the thisngs ure easy for understand step by step",
+      "date": "2026-05-21T13:29:59",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.217777"
+    },
+    {
+      "id": "1e05c2a033fabb5c96c8d123ef11de36",
+      "source": "google_play",
+      "rating": 5,
+      "title": "",
+      "text": "The experience has stayed smooth even after regular use. That consistency matters because I\u2019ve tried apps before that became frustrating after a few weeks.",
+      "date": "2026-05-21T11:31:42",
+      "version": "18.1.1",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.219848"
+    },
+    {
+      "id": "562ff78d830815e9cd734a274ca5c067",
+      "source": "google_play",
+      "rating": 4,
+      "title": "",
+      "text": "Simple and transperant app. One suggestion. Indices row in home page be larger in font size and must contain percentage variation as you had in earlier versions.",
+      "date": "2026-05-21T10:57:39",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.220299"
+    },
+    {
+      "id": "b21576cbcb241675e4be7d5157f56b84",
+      "source": "google_play",
+      "rating": 5,
+      "title": "",
+      "text": "\u201cGroww is very easy to use and best for beginners. Investing in stocks and SIPs becomes simple with this app. Clean UI and smooth experience.\u201d",
+      "date": "2026-05-21T10:13:43",
+      "version": "18.8.1",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.221006"
+    },
+    {
+      "id": "33feb47f583934b0fb36b236670170d0",
+      "source": "google_play",
+      "rating": 4,
+      "title": "",
+      "text": "nice app with quick support easy to invest or trade..",
+      "date": "2026-05-21T10:06:42",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.221554"
+    },
+    {
+      "id": "0b69034d34168662d57fdaf4d4f4699b",
+      "source": "google_play",
+      "rating": 5,
+      "title": "",
+      "text": "simple... tooo good.... inthis app very convenient feel safe...",
+      "date": "2026-05-21T09:29:56",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.222025"
+    },
+    {
+      "id": "84c8ac0d7b24cabdc1f4ab46d92670a3",
+      "source": "google_play",
+      "rating": 5,
+      "title": "",
+      "text": "super and easy to sell and buy stocks.",
+      "date": "2026-05-21T09:17:56",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.222416"
+    }
+  ],
+  "negative": [
+    {
+      "id": "26dc3f001c6242cfd5d51560969776ff",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "without consent funds moved to demant.",
+      "date": "2026-05-21T15:57:21",
+      "version": "",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.209608"
+    },
+    {
+      "id": "2f11353843e1badff9681c68abfed4b4",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "the groee app is totally fraud.",
+      "date": "2026-05-21T15:49:00",
+      "version": "17.95.2",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.213577"
+    },
+    {
+      "id": "ad11a9b9a442a6c75a11c9ffb0f54f14",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "Beginners please Don't download this app, and don't go to share market, All Institutional, Operator's hunters traps and this broker is silent partner for that, Share market is only for rich people's. Morning they gap up or gap down 200 points and suddenly they force them to fall or rise 200 points, Total 400 points u will lose, if u r a option buyers ur total capital will wipe out, If u set SL only SL will hits daily. They want only broker fee, they will know market will rise or falls.",
+      "date": "2026-05-21T15:47:35",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.214249"
+    },
+    {
+      "id": "039ecb9eb3099fdbdd45f784834f4c08",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "this app is scam . i withdraw money from this app and it didn't receive from 5 days .",
+      "date": "2026-05-21T14:55:29",
+      "version": "",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.214698"
+    },
+    {
+      "id": "92b05a7781af6e9d464782c6263d3d44",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "They are not showing any deducted money in any transaction history. without any any information they are deducting peoples money. too much platform charges",
+      "date": "2026-05-21T14:41:28",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.215233"
+    },
+    {
+      "id": "7421163073c27bbefa76cb072c01a2c4",
+      "source": "google_play",
+      "rating": 2,
+      "title": "",
+      "text": "showing wrong expense ratio in mutual funds.. expense ratio changed almost everyday making confusion",
+      "date": "2026-05-21T14:24:50",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.215666"
+    },
+    {
+      "id": "0e236c4876473fa68759c76648f57cc2",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "One of the worst app ever I seen.... Don't use this app it's seems like a fraud app...They are charging INR.26 + 5 Brokerage= INR.31 for delivery which is very high than other brokers.... don't use this app I'm going to close my demat account from groww after withdrawal the funds and never recommend to anyone to open account on this app....word of mouth would be effect this company soon...",
+      "date": "2026-05-21T14:04:30",
+      "version": "",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.216035"
+    },
+    {
+      "id": "61bb42417cfb51192c6d8ed83d4d3b1a",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "Groww is charging fees much more than other demat accounts INR.26 + 5 Brokerage= Total 31 which is much more higher than other demat accounts...I would like to close my demat account and never recommend to anyone to use this.. thanks",
+      "date": "2026-05-21T14:01:21",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.216375"
+    }
+  ],
+  "recent": [
+    {
+      "id": "26dc3f001c6242cfd5d51560969776ff",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "without consent funds moved to demant.",
+      "date": "2026-05-21T15:57:21",
+      "version": "",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.209608"
+    },
+    {
+      "id": "2f11353843e1badff9681c68abfed4b4",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "the groee app is totally fraud.",
+      "date": "2026-05-21T15:49:00",
+      "version": "17.95.2",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.213577"
+    },
+    {
+      "id": "ad11a9b9a442a6c75a11c9ffb0f54f14",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "Beginners please Don't download this app, and don't go to share market, All Institutional, Operator's hunters traps and this broker is silent partner for that, Share market is only for rich people's. Morning they gap up or gap down 200 points and suddenly they force them to fall or rise 200 points, Total 400 points u will lose, if u r a option buyers ur total capital will wipe out, If u set SL only SL will hits daily. They want only broker fee, they will know market will rise or falls.",
+      "date": "2026-05-21T15:47:35",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.214249"
+    },
+    {
+      "id": "039ecb9eb3099fdbdd45f784834f4c08",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "this app is scam . i withdraw money from this app and it didn't receive from 5 days .",
+      "date": "2026-05-21T14:55:29",
+      "version": "",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.214698"
+    },
+    {
+      "id": "92b05a7781af6e9d464782c6263d3d44",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "They are not showing any deducted money in any transaction history. without any any information they are deducting peoples money. too much platform charges",
+      "date": "2026-05-21T14:41:28",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.215233"
+    },
+    {
+      "id": "7421163073c27bbefa76cb072c01a2c4",
+      "source": "google_play",
+      "rating": 2,
+      "title": "",
+      "text": "showing wrong expense ratio in mutual funds.. expense ratio changed almost everyday making confusion",
+      "date": "2026-05-21T14:24:50",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.215666"
+    },
+    {
+      "id": "0e236c4876473fa68759c76648f57cc2",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "One of the worst app ever I seen.... Don't use this app it's seems like a fraud app...They are charging INR.26 + 5 Brokerage= INR.31 for delivery which is very high than other brokers.... don't use this app I'm going to close my demat account from groww after withdrawal the funds and never recommend to anyone to open account on this app....word of mouth would be effect this company soon...",
+      "date": "2026-05-21T14:04:30",
+      "version": "",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.216035"
+    },
+    {
+      "id": "61bb42417cfb51192c6d8ed83d4d3b1a",
+      "source": "google_play",
+      "rating": 1,
+      "title": "",
+      "text": "Groww is charging fees much more than other demat accounts INR.26 + 5 Brokerage= Total 31 which is much more higher than other demat accounts...I would like to close my demat account and never recommend to anyone to use this.. thanks",
+      "date": "2026-05-21T14:01:21",
+      "version": "18.9.0",
+      "processed": true,
+      "created_at": "2026-05-22T11:19:08.216375"
+    }
+  ],
+  "rating_dist": {
+    "1": 80,
+    "2": 6,
+    "3": 4,
+    "4": 13,
+    "5": 21
+  },
+  "wow": {
+    "has_prior_week": false,
+    "headline": "No saved insights for 2026-W20 yet. After next week's sync, you'll see what changed.",
+    "prior_week": "2026-W20",
+    "current_week": "2026-W21",
+    "sentiment_delta": {
+      "positive_pct": 27,
+      "positive_pct_delta": 0
+    },
+    "rising_themes": [],
+    "falling_themes": [],
+    "new_themes": [],
+    "stable_top": [
+      [
+        "Stocks & F&O",
+        55
+      ],
+      [
+        "Mutual Funds & SIP",
+        24
+      ],
+      [
+        "Charts & UX",
+        17
+      ]
+    ]
+  },
+  "source": "seed"
+}
