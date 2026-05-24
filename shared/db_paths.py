@@ -14,6 +14,15 @@ def is_streamlit_runtime() -> bool:
     )
 
 
+def is_streamlit_cloud() -> bool:
+    """True on Streamlit Community Cloud (*.streamlit.app), not local `streamlit run`."""
+    runtime = (os.getenv("STREAMLIT_RUNTIME_ENV") or os.getenv("STREAMLIT_SERVER_ENV") or "").lower()
+    if runtime in {"cloud", "community-cloud"}:
+        return True
+    host = (os.getenv("HOSTNAME") or os.getenv("STREAMLIT_SERVER_ADDRESS") or "").lower()
+    return host.endswith(".streamlit.app") or ".streamlit.app" in host
+
+
 def resolve_database_path(path: str | None = None) -> str:
     """
     Pick a SQLite file path that exists and is writable.

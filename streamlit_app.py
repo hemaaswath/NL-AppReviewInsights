@@ -66,6 +66,20 @@ def _analysis_configured() -> bool:
     return bool(config_value("GROQ_API_KEY"))
 
 
+def _google_configured() -> bool:
+    return bool(config_value("GOOGLE_TOKEN_JSON"))
+
+
+def _publish_configured() -> bool:
+    return bool(config_value("GOOGLE_DOC_ID") and config_value("EMAIL_RECIPIENT"))
+
+
+def _next_sync_phase(current: str | None) -> str | None:
+    if current == "data":
+        return "publish" if _google_configured() and _publish_configured() else None
+    return None
+
+
 def _db_mtime(db_path: str) -> float:
     try:
         return os.path.getmtime(db_path)
@@ -104,7 +118,7 @@ from frontend.dashboard_ui import (  # noqa: E402
     sentiment_donut,
 )
 from shared.dashboard_data import has_live_data  # noqa: E402
-from shared.db_paths import resolve_database_path  # noqa: E402
+from shared.db_paths import is_streamlit_cloud, resolve_database_path  # noqa: E402
 from shared.groww_product_map import themes_to_area_counts  # noqa: E402
 from shared.play_store_config import resolve_play_package, validate_finance_package  # noqa: E402
 
@@ -322,7 +336,22 @@ with st.sidebar:
             "Update Streamlit Secrets."
         )
     st.caption(f"Source app: {_pkg_info}" if _pkg_ok else f"⚠ {_pkg_info}")
-    st.caption("Dashboard loads instantly; live sync runs automatically when needed.")
+    if is_streamlit_cloud():
+        st.caption("Cloud: snapshot loads instantly — use **Refresh insights** for live sync.")
+        missing = [
+            k
+            for k, ok in (
+                ("GROQ_API_KEY", _analysis_configured()),
+                ("GOOGLE_TOKEN_JSON", _google_configured()),
+                ("GOOGLE_DOC_ID", bool(config_value("GOOGLE_DOC_ID"))),
+                ("EMAIL_RECIPIENT", bool(config_value("EMAIL_RECIPIENT"))),
+            )
+            if not ok
+        ]
+        if missing:
+            st.info("Streamlit Secrets → add: " + ", ".join(missing))
+    else:
+        st.caption("Dashboard loads instantly; live sync runs automatically when needed.")
     if st.button("Refresh insights", type="primary", use_container_width=True):
         st.session_state["force_refresh"] = True
         st.session_state["sync_phase"] = "data"
@@ -340,7 +369,7 @@ if st.session_state.get("force_refresh") and _analysis_configured():
         st.stop()
     run_sync_pipeline(db_path, clear_first=True, phase="data")
     st.session_state["force_refresh"] = False
-    st.session_state["sync_phase"] = "publish"
+    st.session_state["sync_phase"] = _next_sync_phase("data")
     st.rerun()
 
 # Bootstrap auto-sync when live DB is empty (Streamlit Cloud cold start)
@@ -349,19 +378,27 @@ if has_live_data(live_snap):
     data, data_source = live_snap, "live"
 else:
     data, data_source = load_seed_cached(), "seed"
-    if _analysis_configured() and st.session_state.get("sync_phase") is None:
+    if (
+        _analysis_configured()
+        and st.session_state.get("sync_phase") is None
+        and not is_streamlit_cloud()
+    ):
         st.session_state["sync_phase"] = "data"
 
 render_dashboard(data, data_source=data_source, play_url=play_url)
 
-# Background sync after UI is rendered (Streamlit streams widgets top-to-bottom)
+# Background sync after UI is rendered (local dev only; cloud uses Refresh button)
 sync_phase = st.session_state.get("sync_phase")
 if sync_phase and _analysis_configured() and _pkg_ok:
-    if sync_phase == "data":
-        run_sync_pipeline(db_path, clear_first=False, phase="data")
-        st.session_state["sync_phase"] = "publish"
-        st.rerun()
-    elif sync_phase == "publish":
-        run_sync_pipeline(db_path, clear_first=False, phase="publish")
+    try:
+        if sync_phase == "data":
+            run_sync_pipeline(db_path, clear_first=False, phase="data")
+            st.session_state["sync_phase"] = _next_sync_phase("data")
+            st.rerun()
+        elif sync_phase == "publish":
+            run_sync_pipeline(db_path, clear_first=False, phase="publish")
+            st.session_state["sync_phase"] = None
+            st.rerun()
+    except Exception as exc:
         st.session_state["sync_phase"] = None
-        st.rerun()
+        st.error(f"Sync failed: {exc}")

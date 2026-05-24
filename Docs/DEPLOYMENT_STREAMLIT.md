@@ -57,10 +57,12 @@ Your `.env` at the repo root is loaded automatically; local `token.json` is used
 ## Deploy on share.streamlit.io
 
 1. Push the repo to GitHub (`https://github.com/hemaaswath/NL-AppReviewInsights`).
-2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**.
-3. **Repository**: your fork/repo, branch `main`.
+2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app** (or open existing app).
+3. **Repository**: `hemaaswath/NL-AppReviewInsights`, branch `main`.
 4. **Main file path**: `streamlit_app.py`
-5. **App settings → Secrets** — paste TOML from `secrets_export.txt` (minimum keys):
+5. **Authorize GitHub** when Streamlit asks — this adds a **read-only deploy key** named like  
+   `Streamlit - (main, streamlit_app.py)`. **That is normal.** It is not an API key leak; do not delete it if you want Cloud deploys to work.
+6. **App settings → Secrets** — paste TOML from `secrets_export.txt` (minimum keys):
 
    | Secret | Required |
    |--------|----------|
@@ -72,7 +74,23 @@ Your `.env` at the repo root is loaded automatically; local `token.json` is used
    | `DATABASE_PATH` | Optional (`data/reviews.db`) |
    | `GOOGLE_CREDENTIALS_JSON` | Optional |
 
-6. **Deploy**. Open the app URL — the **dashboard** loads automatically; phases 1–4 run in the **background** when data is missing. Use sidebar **Refresh data** to re-sync.
+7. **Deploy**. The **bundled snapshot** loads immediately on Cloud. Click sidebar **Refresh insights** to run live Phases 1–2 (and 3–4 if Google secrets are set).
+
+---
+
+## If deploy fails after deleting the Streamlit deploy key
+
+If you removed **Settings → Deploy keys → Streamlit - (main, streamlit_app.py)** on GitHub, Streamlit can no longer clone your repo.
+
+1. Open [share.streamlit.io](https://share.streamlit.io) → your app → **⋮** → **Settings**.
+2. **Reconnect** GitHub / re-authorize the repository (or delete the app and create **New app**).
+3. Confirm a new deploy key appears under GitHub → repo **Settings → Deploy keys** (new SHA256 fingerprint is OK).
+4. **Reboot app** on Streamlit Cloud.
+5. Re-check **App settings → Secrets** (they are stored on Streamlit, not in GitHub).
+
+GitHub email notifications about “secrets” are often either:
+- **Secret scanning** on old commits (resolve in **Security → Secret scanning**), or
+- **Deploy key added by Streamlit** (safe — required for deployment).
 
 ---
 
@@ -100,6 +118,8 @@ Your `.env` at the repo root is loaded automatically; local `token.json` is used
 
 | Error | Fix |
 |-------|-----|
+| App cannot access repository / deploy failed | Reconnect GitHub on share.streamlit.io; allow Streamlit deploy key (read-only). |
+| GitHub notification about Streamlit deploy key | Normal — not a leaked API key. Only delete if you are removing Streamlit Cloud entirely. |
 | Google token missing | Add `GOOGLE_TOKEN_JSON` to Streamlit secrets; re-export from local `token.json`. |
 | Permission denied on Doc | Share the Doc with the OAuth Gmail account. |
 | Groq rate limit | Reduce reviews in Phase 2 config or run Phase 2 only after a cooldown. |
